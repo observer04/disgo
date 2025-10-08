@@ -1,0 +1,1 @@
+net.Listen binds to a port and listens and net.Accept accepts connection and till client it happens.
