@@ -1,1 +1,2 @@
 net.Listen binds to a port and listens and net.Accept accepts connection and till client it happens.
+to handle multiple concurrent connection just put the listener.Accept in a for loop
