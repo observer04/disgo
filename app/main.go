@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -37,14 +39,22 @@ func main() {
 func handleClient(con net.Conn) {
 	defer con.Close()
 	buf := make([]byte, 128)
-	n, err := con.Read(buf)
-	if err != nil {
-		log.Fatal("problem reading from buffer")
-	}
-	log.Printf("Received Data: ", buf[:n])
-	msg := []byte("+PONG\r\n")
-	_, err = con.Write(msg)
-	if err != nil {
-		log.Fatal("problem writing to buffer")
+	for {
+		n, err := con.Read(buf)
+		//break on EOF
+		if errors.Is(err, io.EOF) {
+			log.Print("EOF reached")
+			break
+		}
+		if err != nil {
+			log.Print("problem reading from buffer")
+			break
+		}
+		log.Printf("Received Data: %v", buf[:n])
+		msg := []byte("+PONG\r\n")
+		_, err = con.Write(msg)
+		if err != nil {
+			log.Print("problem writing to buffer")
+		}
 	}
 }
