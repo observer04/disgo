@@ -59,6 +59,8 @@ func (k *Kv) Set(key, value string) {
 
 func (k *Kv) Get(key string) (string, bool) {
 	k.mu.Lock()
+	defer k.mu.Unlock()
+
 	// Check for expiration
 	if expTime, ok := k.exp[key]; ok {
 		if time.Now().After(expTime) {
@@ -69,7 +71,6 @@ func (k *Kv) Get(key string) (string, bool) {
 		}
 	}
 	val, ok := k.data[key]
-	k.mu.Unlock()
 	return val, ok
 }
 
