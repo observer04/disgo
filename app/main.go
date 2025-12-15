@@ -21,19 +21,22 @@ type RespValue interface{}
 
 type SimpleString string
 type BulkString string
+type integer int64
 
 // Kv is a simple in-memory key-value store with mutex for concurrency safety.
 type Kv struct {
-	mu   sync.Mutex
-	data map[string]string
-	exp  map[string]time.Time
+	mu    sync.Mutex
+	data  map[string]string
+	exp   map[string]time.Time
+	lists map[string][]string
 }
 
 // constructor function for Kv
 func NewKv() *Kv {
 	return &Kv{
-		data: make(map[string]string),
-		exp:  make(map[string]time.Time),
+		data:  make(map[string]string),
+		exp:   make(map[string]time.Time),
+		lists: make(map[string][]string),
 	}
 }
 
@@ -70,15 +73,25 @@ func (k *Kv) Get(key string) (string, bool) {
 	return val, ok
 }
 
+// list operations:
+// RPUSH : append values to the list stored at key
+func (k *Kv) RPush(key string, values ...string) int {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.lists[key] = append(k.lists[key], values...)
+	return len(k.lists[key])
+}
+
 // Handlers
 type Handler func(args []string, kv *Kv) (RespValue, error)
 
 // Map of command names to their handlers
 var handlers = map[string]Handler{
-	"PING": ping,
-	"ECHO": echo,
-	"SET":  set,
-	"GET":  get,
+	"PING":  ping,
+	"ECHO":  echo,
+	"SET":   set,
+	"GET":   get,
+	"RPUSH": rpush,
 }
 
 // Handlers for redis client commands
@@ -148,6 +161,16 @@ func set(args []string, kv *Kv) (RespValue, error) {
 
 	kv.SetWithTTL(key, value, ttl)
 	return SimpleString("OK"), nil
+}
+
+func rpush(args []string, kv *Kv) (RespValue, error) {
+	if len(args) < 2 {
+		return nil, errors.New("RPUSH requires at least two arguments")
+	}
+	key := args[0]
+	values := args[1:]
+	pushedLen := kv.RPush(key, values...)
+	return integer(pushedLen), nil
 }
 
 func main() {
@@ -264,6 +287,7 @@ func readRespArray(r *bufio.Reader) ([]string, error) {
 
 }
 
+// write RESP value to writer
 func writeResp(w *bufio.Writer, val RespValue) error {
 	switch v := val.(type) {
 	case nil:
@@ -279,6 +303,11 @@ func writeResp(w *bufio.Writer, val RespValue) error {
 	case BulkString:
 
 		if _, err := w.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v)); err != nil {
+			return err
+		}
+		return nil
+	case integer:
+		if _, err := w.WriteString(fmt.Sprintf(":%d\r\n", v)); err != nil {
 			return err
 		}
 		return nil
