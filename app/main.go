@@ -22,6 +22,7 @@ type RespValue interface{}
 type SimpleString string
 type BulkString string
 type integer int64
+type Array []RespValue
 
 // Kv is a simple in-memory key-value store with mutex for concurrency safety.
 type Kv struct {
@@ -83,16 +84,42 @@ func (k *Kv) RPush(key string, values ...string) int {
 	return len(k.lists[key])
 }
 
-// Handlers
+// LRANGE: get elements from list stored at key
+func (k *Kv) LRange(key string, start, stop int) ([]string, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	list, ok := k.lists[key]
+
+	n := len(list)
+	if !ok {
+		return []string{}, nil
+	}
+	if start >= n {
+		return []string{}, nil
+	}
+	if start < 0 {
+		start = 0
+	}
+	if stop >= n {
+		stop = n - 1
+	}
+	if start > stop {
+		return []string{}, nil
+	}
+	return list[start : stop+1], nil
+}
+
+// Handler function type
 type Handler func(args []string, kv *Kv) (RespValue, error)
 
 // Map of command names to their handlers
 var handlers = map[string]Handler{
-	"PING":  ping,
-	"ECHO":  echo,
-	"SET":   set,
-	"GET":   get,
-	"RPUSH": rpush,
+	"PING":   ping,
+	"ECHO":   echo,
+	"SET":    set,
+	"GET":    get,
+	"RPUSH":  rpush,
+	"LRANGE": lrange,
 }
 
 // Handlers for redis client commands
@@ -172,6 +199,31 @@ func rpush(args []string, kv *Kv) (RespValue, error) {
 	values := args[1:]
 	pushedLen := kv.RPush(key, values...)
 	return integer(pushedLen), nil
+}
+
+func lrange(args []string, kv *Kv) (RespValue, error) {
+	if len(args) != 3 {
+		return nil, errors.New("LRANGE requires exactly three arguments")
+	}
+	key := args[0]
+	start, err := strconv.Atoi(args[1])
+	if err != nil {
+		return nil, errors.New("invalid start index")
+	}
+	stop, err := strconv.Atoi(args[2])
+	if err != nil {
+		return nil, errors.New("invalid stop index")
+	}
+	list, err := kv.LRange(key, start, stop)
+	if err != nil {
+		return nil, err
+	}
+	//convert []string to Array of BulkString
+	respArray := make(Array, len(list))
+	for i, v := range list {
+		respArray[i] = BulkString(v)
+	}
+	return respArray, nil
 }
 
 func main() {
@@ -312,6 +364,16 @@ func writeResp(w *bufio.Writer, val RespValue) error {
 			return err
 		}
 		return nil
+	case Array:
+		if _, err := w.WriteString(fmt.Sprintf("*%d\r\n", len(v))); err != nil {
+			return err
+		}
+		for _, elem := range v {
+			if err := writeResp(w, elem); err != nil {
+				return err
+			}
+		}
+		return nil
 	default:
 		return errors.New("unsupported RESP type")
 	}
@@ -342,7 +404,7 @@ func handleClient(con net.Conn, kv *Kv) {
 		cmd := strings.ToUpper(args[0])
 		handler, ok := handlers[cmd]
 		if !ok {
-			errMsg := fmt.Sprintf("-Err unknown command\r\n")
+			errMsg := "-Err unknown command\r\n"
 			w.WriteString(errMsg)
 			w.Flush()
 			continue
