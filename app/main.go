@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 var _ = os.Exit
@@ -25,24 +26,47 @@ type BulkString string
 type Kv struct {
 	mu   sync.Mutex
 	data map[string]string
+	exp  map[string]time.Time
 }
 
 // constructor function for Kv
 func NewKv() *Kv {
-	return &Kv{data: make(map[string]string)}
+	return &Kv{
+		data: make(map[string]string),
+		exp:  make(map[string]time.Time),
+	}
 }
 
-// Set stores the key-value pair in the Kv store.
-func (k *Kv) Set(key, value string) {
+// Set stores the key-value pair in the Kv store with an optional TTL
+func (k *Kv) SetWithTTL(key, value string, ttl time.Duration) {
 	k.mu.Lock()
 	k.data[key] = value
+	if ttl > 0 {
+		k.exp[key] = time.Now().Add(ttl)
+	} else {
+		delete(k.exp, key)
+	}
 	k.mu.Unlock()
+}
+
+// without expiration
+func (k *Kv) Set(key, value string) {
+	k.SetWithTTL(key, value, 0)
 }
 
 func (k *Kv) Get(key string) (string, bool) {
 	k.mu.Lock()
-	defer k.mu.Unlock()
+	// Check for expiration
+	if expTime, ok := k.exp[key]; ok {
+		if time.Now().After(expTime) {
+			// Key has expired
+			delete(k.data, key)
+			delete(k.exp, key)
+			return "", false
+		}
+	}
 	val, ok := k.data[key]
+	k.mu.Unlock()
 	return val, ok
 }
 
@@ -85,11 +109,44 @@ func get(args []string, kv *Kv) (RespValue, error) {
 	return BulkString(val), nil
 }
 
+// parse set
 func set(args []string, kv *Kv) (RespValue, error) {
-	if len(args) != 2 {
-		return nil, errors.New("SET requires exactly two arguments")
+	if len(args) < 2 {
+		return nil, errors.New("SET requires atleast two arguments")
 	}
-	kv.Set(args[0], args[1])
+	key := args[0]
+	value := args[1]
+	var ttl time.Duration
+
+	// Check for optional PX and EX argument for expiration in milliseconds
+	if len(args) > 2 {
+		i := 2
+		for i < len(args) {
+			option := strings.ToUpper(args[i])
+			if option == "PX" && i+1 < len(args) {
+				ms, err := strconv.Atoi(args[i+1])
+				if err != nil {
+					return nil, errors.New("invalid PX value")
+				}
+				ttl = time.Duration(ms) * time.Millisecond
+				i += 2
+				continue
+			}
+			if option == "EX" && i+1 < len(args) {
+				seconds, err := strconv.Atoi(args[i+1])
+				if err != nil {
+					return nil, errors.New("invalid EX value")
+				}
+				ttl = time.Duration(seconds) * time.Second
+				i += 2
+				continue
+			}
+			return nil, errors.New("invalid SET option")
+
+		}
+	}
+
+	kv.SetWithTTL(key, value, ttl)
 	return SimpleString("OK"), nil
 }
 
@@ -107,6 +164,23 @@ func main() {
 
 	// Initialize key-value store
 	kvStore := NewKv()
+
+	// Goroutine to handle expiration of keys
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			now := time.Now()
+			kvStore.mu.Lock()
+			for k, exp := range kvStore.exp {
+				if now.After(exp) {
+					delete(kvStore.data, k)
+					delete(kvStore.exp, k)
+				}
+			}
+			kvStore.mu.Unlock()
+		}
+	}()
 
 	//Accept connections in a loop
 	for {
