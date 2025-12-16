@@ -89,22 +89,32 @@ func (k *Kv) LRange(key string, start, stop int) ([]string, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	list, ok := k.lists[key]
-
-	n := len(list)
 	if !ok {
 		return []string{}, nil
 	}
-	if start >= n {
-		return []string{}, nil
+	n := len(list)
+
+	// convert negative indices to absolute positions
+	if start < 0 {
+		start = n + start
 	}
+	if stop < 0 {
+		stop = n + stop
+	}
+
+	// if negative index is out of range, treat as 0
 	if start < 0 {
 		start = 0
 	}
+	if stop < 0 {
+		stop = 0
+	}
+
+	if start >= n || start > stop {
+		return []string{}, nil
+	}
 	if stop >= n {
 		stop = n - 1
-	}
-	if start > stop {
-		return []string{}, nil
 	}
 	return list[start : stop+1], nil
 }
@@ -200,6 +210,7 @@ func rpush(args []string, kv *Kv) (RespValue, error) {
 	pushedLen := kv.RPush(key, values...)
 	return integer(pushedLen), nil
 }
+
 
 func lrange(args []string, kv *Kv) (RespValue, error) {
 	if len(args) != 3 {
