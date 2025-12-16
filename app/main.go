@@ -137,6 +137,19 @@ func (k *Kv) LLen(key string) integer {
 	return integer(len(k.lists[key]))
 }
 
+// LPop: remove and return the first element of the list stored at key
+func (k *Kv) LPop(key string) (string, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	list, ok := k.lists[key]
+	if !ok || len(list) == 0 {
+		return "", errors.New("list is empty or does not exist")
+	}
+	val := list[0]
+	k.lists[key] = list[1:]
+	return val, nil
+}
+
 // Handler function type
 type Handler func(args []string, kv *Kv) (RespValue, error)
 
@@ -150,6 +163,7 @@ var handlers = map[string]Handler{
 	"LRANGE": lrange,
 	"LPUSH":  lpush,
 	"LLEN":   llen,
+	"LPOP":   lpop,
 }
 
 // Handlers for redis client commands
@@ -280,6 +294,18 @@ func llen(args []string, kv *Kv) (RespValue, error) {
 	key := args[0]
 	length := kv.LLen(key)
 	return length, nil
+}
+
+func lpop(args []string, kv *Kv) (RespValue, error) {
+	if len(args) != 1 {
+		return nil, errors.New("LPOP requires exactly one argument")
+	}
+	key := args[0]
+	val, err := kv.LPop(key)
+	if err != nil {
+		return nil, nil // return null bulk string if list is empty or does not exist
+	}
+	return BulkString(val), nil
 }
 
 func main() {
