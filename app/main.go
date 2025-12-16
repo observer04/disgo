@@ -130,6 +130,13 @@ func (k *Kv) LPush(key string, values ...string) int {
 	return len(k.lists[key])
 }
 
+// LLen: get length of list stored at key
+func (k *Kv) LLen(key string) integer {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return integer(len(k.lists[key]))
+}
+
 // Handler function type
 type Handler func(args []string, kv *Kv) (RespValue, error)
 
@@ -142,6 +149,7 @@ var handlers = map[string]Handler{
 	"RPUSH":  rpush,
 	"LRANGE": lrange,
 	"LPUSH":  lpush,
+	"LLEN":   llen,
 }
 
 // Handlers for redis client commands
@@ -263,6 +271,15 @@ func lpush(args []string, kv *Kv) (RespValue, error) {
 	}
 	pushedLen := kv.LPush(key, rev...)
 	return integer(pushedLen), nil
+}
+
+func llen(args []string, kv *Kv) (RespValue, error) {
+	if len(args) != 1 {
+		return nil, errors.New("LLEN requires exactly one argument")
+	}
+	key := args[0]
+	length := kv.LLen(key)
+	return length, nil
 }
 
 func main() {
