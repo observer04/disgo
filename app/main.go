@@ -119,6 +119,17 @@ func (k *Kv) LRange(key string, start, stop int) ([]string, error) {
 	return list[start : stop+1], nil
 }
 
+// LPush: prepend values to the list stored at key
+func (k *Kv) LPush(key string, values ...string) int {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	// Prepend values in reverse order so the given order is preserved
+	for i := len(values) - 1; i >= 0; i-- {
+		k.lists[key] = append([]string{values[i]}, k.lists[key]...)
+	}
+	return len(k.lists[key])
+}
+
 // Handler function type
 type Handler func(args []string, kv *Kv) (RespValue, error)
 
@@ -130,6 +141,7 @@ var handlers = map[string]Handler{
 	"GET":    get,
 	"RPUSH":  rpush,
 	"LRANGE": lrange,
+	"LPUSH":  lpush,
 }
 
 // Handlers for redis client commands
@@ -211,7 +223,6 @@ func rpush(args []string, kv *Kv) (RespValue, error) {
 	return integer(pushedLen), nil
 }
 
-
 func lrange(args []string, kv *Kv) (RespValue, error) {
 	if len(args) != 3 {
 		return nil, errors.New("LRANGE requires exactly three arguments")
@@ -235,6 +246,23 @@ func lrange(args []string, kv *Kv) (RespValue, error) {
 		respArray[i] = BulkString(v)
 	}
 	return respArray, nil
+}
+
+func lpush(args []string, kv *Kv) (RespValue, error) {
+	if len(args) < 2 {
+		return nil, errors.New("LPUSH requires at least two arguments")
+	}
+	key := args[0]
+	values := args[1:]
+	// Redis LPUSH inserts values from left to right so the last argument
+	// ends up at the head. `Kv.LPush` preserves input order, so reverse
+	// the values here to match the network semantics.
+	rev := make([]string, len(values))
+	for i := range values {
+		rev[i] = values[len(values)-1-i]
+	}
+	pushedLen := kv.LPush(key, rev...)
+	return integer(pushedLen), nil
 }
 
 func main() {
