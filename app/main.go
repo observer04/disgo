@@ -137,17 +137,24 @@ func (k *Kv) LLen(key string) integer {
 	return integer(len(k.lists[key]))
 }
 
-// LPop: remove and return the first element of the list stored at key
-func (k *Kv) LPop(key string) (string, error) {
+// LPop: remove and return the first element OR the n first elements if n is provided
+func (k *Kv) LPop(key string, n int) ([]string, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	list, ok := k.lists[key]
 	if !ok || len(list) == 0 {
-		return "", errors.New("list is empty or does not exist")
+		return nil, errors.New("list is empty or does not exist")
 	}
-	val := list[0]
-	k.lists[key] = list[1:]
-	return val, nil
+	if n <= 0 {
+		n = 1
+	}
+	if n > len(list) {
+		n = len(list)
+	}
+	vals := make([]string, n)
+	copy(vals, list[:n])
+	k.lists[key] = list[n:]
+	return vals, nil
 }
 
 // Handler function type
@@ -297,15 +304,33 @@ func llen(args []string, kv *Kv) (RespValue, error) {
 }
 
 func lpop(args []string, kv *Kv) (RespValue, error) {
-	if len(args) != 1 {
-		return nil, errors.New("LPOP requires exactly one argument")
+	if len(args) < 1 || len(args) > 2 {
+		return nil, errors.New("LPOP requires one or two arguments")
 	}
 	key := args[0]
-	val, err := kv.LPop(key)
-	if err != nil {
-		return nil, nil // return null bulk string if list is empty or does not exist
+	n := 1
+	if len(args) == 2 {
+		var err error
+		n, err = strconv.Atoi(args[1])
+		if err != nil {
+			return nil, errors.New("invalid count argument")
+		}
 	}
-	return BulkString(val), nil
+	vals, err := kv.LPop(key, n)
+	if err != nil {
+		return nil, err
+	}
+	if len(vals) == 0 {
+		return nil, nil
+	}
+	if len(vals) == 1 {
+		return BulkString(vals[0]), nil
+	}
+	respArray := make(Array, len(vals))
+	for i, v := range vals {
+		respArray[i] = BulkString(v)
+	}
+	return respArray, nil
 }
 
 func main() {
