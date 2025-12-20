@@ -30,14 +30,20 @@ type Kv struct {
 	data  map[string]string
 	exp   map[string]time.Time
 	lists map[string][]string
+	// waiters holds channels for clients blocked on BLPOP for a given key.
+	// When an element is pushed to a list with waiting clients, the server
+	// will deliver the element to the longest-waiting client instead of
+	// appending it to the list.
+	waiters map[string][]chan string
 }
 
 // constructor function for Kv
 func NewKv() *Kv {
 	return &Kv{
-		data:  make(map[string]string),
-		exp:   make(map[string]time.Time),
-		lists: make(map[string][]string),
+		data:    make(map[string]string),
+		exp:     make(map[string]time.Time),
+		lists:   make(map[string][]string),
+		waiters: make(map[string][]chan string),
 	}
 }
 
@@ -157,6 +163,8 @@ func (k *Kv) LPop(key string, n int) ([]string, error) {
 	return vals, nil
 }
 
+// B
+
 // Handler function type
 type Handler func(args []string, kv *Kv) (RespValue, error)
 
@@ -169,6 +177,7 @@ var handlers = map[string]Handler{
 	"RPUSH":  rpush,
 	"LRANGE": lrange,
 	"LPUSH":  lpush,
+	"BLPOP":  blpop,
 	"LLEN":   llen,
 	"LPOP":   lpop,
 }
@@ -248,7 +257,29 @@ func rpush(args []string, kv *Kv) (RespValue, error) {
 	}
 	key := args[0]
 	values := args[1:]
-	pushedLen := kv.RPush(key, values...)
+	// Append all values first so the returned length reflects the list
+	// size immediately after the RPUSH. Then deliver elements to any
+	// waiters (FIFO) by popping from the list and sending the value.
+	kv.mu.Lock()
+	// append values
+	kv.lists[key] = append(kv.lists[key], values...)
+	pushedLen := len(kv.lists[key])
+
+	// deliver to waiters while both waiters and list items exist
+	for len(kv.waiters[key]) > 0 && len(kv.lists[key]) > 0 {
+		ch := kv.waiters[key][0]
+		kv.waiters[key] = kv.waiters[key][1:]
+		// pop first element
+		val := kv.lists[key][0]
+		kv.lists[key] = kv.lists[key][1:]
+		// deliver without blocking; channel is buffered but use goroutine as fallback
+		select {
+		case ch <- val:
+		default:
+			go func(c chan string, v string) { c <- v }(ch, val)
+		}
+	}
+	kv.mu.Unlock()
 	return integer(pushedLen), nil
 }
 
@@ -292,6 +323,64 @@ func lpush(args []string, kv *Kv) (RespValue, error) {
 	}
 	pushedLen := kv.LPush(key, rev...)
 	return integer(pushedLen), nil
+}
+
+func blpop(args []string, kv *Kv) (RespValue, error) {
+	if len(args) != 2 {
+		return nil, errors.New("BLPOP requires exactly two arguments: key and timeout")
+	}
+	key := args[0]
+	timeoutSec, err := strconv.Atoi(args[1])
+	if err != nil || timeoutSec < 0 {
+		return nil, errors.New("invalid timeout")
+	}
+
+	// First try immediate pop
+	kv.mu.Lock()
+	if list, ok := kv.lists[key]; ok && len(list) > 0 {
+		val := list[0]
+		kv.lists[key] = list[1:]
+		kv.mu.Unlock()
+		resp := Array{BulkString(key), BulkString(val)}
+		return resp, nil
+	}
+
+	// No element available: set up a waiter
+	ch := make(chan string, 1)
+	kv.waiters[key] = append(kv.waiters[key], ch) //append waiter channel to the list of waiters for the key
+	//channel is buffered to avoid blocking the sender in rpush
+	kv.mu.Unlock()
+
+	// Wait for value or timeout. timeoutSec == 0 means block indefinitely.
+	if timeoutSec == 0 {
+		val := <-ch
+		resp := Array{BulkString(key), BulkString(val)}
+		return resp, nil
+	}
+
+	timer := time.NewTimer(time.Duration(timeoutSec) * time.Second)
+	select {
+	// Got value not a timeout
+	case val := <-ch:
+		if !timer.Stop() {
+			<-timer.C // drain the timer channel if needed
+		}
+		resp := Array{BulkString(key), BulkString(val)}
+		return resp, nil
+	case <-timer.C:
+		// timeout: remove waiter
+		kv.mu.Lock()
+		waiters := kv.waiters[key]
+		// find and remove ch from waiters slice
+		for i, w := range waiters {
+			if w == ch {
+				kv.waiters[key] = append(waiters[:i], waiters[i+1:]...)
+				break
+			}
+		}
+		kv.mu.Unlock()
+		return nil, nil
+	}
 }
 
 func llen(args []string, kv *Kv) (RespValue, error) {
