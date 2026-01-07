@@ -23,6 +23,7 @@ type SimpleString string
 type BulkString string
 type integer int64
 type Array []RespValue
+type NullArray struct{}
 
 // Kv is a simple in-memory key-value store with mutex for concurrency safety.
 type Kv struct {
@@ -330,7 +331,7 @@ func blpop(args []string, kv *Kv) (RespValue, error) {
 		return nil, errors.New("BLPOP requires exactly two arguments: key and timeout")
 	}
 	key := args[0]
-	timeoutSec, err := strconv.Atoi(args[1])
+	timeoutSec, err := strconv.ParseFloat(args[1], 64)
 	if err != nil || timeoutSec < 0 {
 		return nil, errors.New("invalid timeout")
 	}
@@ -358,7 +359,7 @@ func blpop(args []string, kv *Kv) (RespValue, error) {
 		return resp, nil
 	}
 
-	timer := time.NewTimer(time.Duration(timeoutSec) * time.Second)
+	timer := time.NewTimer(time.Duration(timeoutSec * float64(time.Second)))
 	select {
 	// Got value not a timeout
 	case val := <-ch:
@@ -367,6 +368,7 @@ func blpop(args []string, kv *Kv) (RespValue, error) {
 		}
 		resp := Array{BulkString(key), BulkString(val)}
 		return resp, nil
+	// Timeout case
 	case <-timer.C:
 		// timeout: remove waiter
 		kv.mu.Lock()
@@ -379,7 +381,7 @@ func blpop(args []string, kv *Kv) (RespValue, error) {
 			}
 		}
 		kv.mu.Unlock()
-		return nil, nil
+		return NullArray{}, nil
 	}
 }
 
@@ -542,6 +544,9 @@ func writeResp(w *bufio.Writer, val RespValue) error {
 	case nil:
 		// Null bulk string
 		_, err := w.WriteString("$-1\r\n")
+		return err
+	case NullArray:
+		_, err := w.WriteString("*-1\r\n")
 		return err
 	case SimpleString:
 		if _, err := w.WriteString(fmt.Sprintf("+%s\r\n", string(v))); err != nil {
