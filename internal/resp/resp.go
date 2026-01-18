@@ -98,14 +98,14 @@ func Write(w *bufio.Writer, val Value) error {
 		_, err := w.WriteString("* -1\r\n")
 		return err
 	case SimpleString:
-		if _, err := w.WriteString(fmt.Sprintf("+%s\r\n", string(v))); err != nil {
+		if _, err := w.WriteString(fmt.Sprintf("+%s\r\n", string(v))); err != nil { //eg: +OK\r\n
 			return err
 		}
 		return nil
 
 	case BulkString:
 
-		if _, err := w.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v)); err != nil {
+		if _, err := w.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v)); err != nil { //eg: $3\r\nfoo\r\n
 			return err
 		}
 		return nil

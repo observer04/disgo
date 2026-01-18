@@ -8,10 +8,11 @@ import (
 
 // Kv is a simple in-memory key-value store with mutex for concurrency safety.
 type Kv struct {
-	mu    sync.Mutex
-	data  map[string]string
-	exp   map[string]time.Time
-	lists map[string][]string
+	mu      sync.Mutex
+	data    map[string]string
+	exp     map[string]time.Time
+	lists   map[string][]string
+	streams map[string]*Stream // key to Stream mapping
 	// waiters holds channels for clients blocked on BLPOP for a given key.
 	// When an element is pushed to a list with waiting clients, the server
 	// will deliver the element to the longest-waiting client instead of
@@ -25,6 +26,7 @@ func NewKv() *Kv {
 		data:    make(map[string]string),
 		exp:     make(map[string]time.Time),
 		lists:   make(map[string][]string),
+		streams: make(map[string]*Stream),
 		waiters: make(map[string][]chan string),
 	}
 }
@@ -221,7 +223,24 @@ func (k *Kv) Type(key string) string {
 	if _, ok := k.lists[key]; ok {
 		return "list"
 	}
+	if _, ok := k.streams[key]; ok {
+		return "stream"
+	}
 	return "none"
+}
+
+// XAdd appends an entry to a stream. Creates the stream if it doesn't exist.
+func (k *Kv) XAdd(key, id string, values []string) (string, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	stream, ok := k.streams[key]
+	if !ok {
+		stream = NewStream()
+		k.streams[key] = stream
+	}
+
+	return stream.Add(id, values)
 }
 
 // RunExpirationLoop handles the background expiration of keys
