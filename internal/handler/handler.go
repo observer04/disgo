@@ -28,6 +28,7 @@ func GetHandlers() map[string]Handler {
 		"LPOP":   lpop,
 		"TYPE":   typeCmd,
 		"XADD":   xadd,
+		"XRANGE": xrange,
 	}
 }
 

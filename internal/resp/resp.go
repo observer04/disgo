@@ -89,13 +89,13 @@ func Read(r *bufio.Reader) ([]string, error) {
 
 // write RESP value to writer
 func Write(w *bufio.Writer, val Value) error {
-	switch v := val.(type) {
+	switch v := val.(type) { // reason is that Go does not allow switch on types directly so we use type assertion
 	case nil:
 		// Null bulk string
 		_, err := w.WriteString("$-1\r\n")
 		return err
 	case NullArray:
-		_, err := w.WriteString("* -1\r\n")
+		_, err := w.WriteString("*-1\r\n")
 		return err
 	case SimpleString:
 		if _, err := w.WriteString(fmt.Sprintf("+%s\r\n", string(v))); err != nil { //eg: +OK\r\n
@@ -115,7 +115,7 @@ func Write(w *bufio.Writer, val Value) error {
 		}
 		return nil
 	case Array:
-		if _, err := w.WriteString(fmt.Sprintf("* %d\r\n", len(v))); err != nil {
+		if _, err := w.WriteString(fmt.Sprintf("*%d\r\n", len(v))); err != nil {
 			return err
 		}
 		for _, elem := range v {

@@ -251,6 +251,27 @@ func (k *Kv) XAdd(key, id string, values []string) (string, error) {
 	return stream.Add(id, values)
 }
 
+// XRange returns a range of entries from a stream.
+func (k *Kv) XRange(key, start, end string) ([]StreamEntry, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	// Check type> key shouldnt have anything except stream
+	if _, ok := k.data[key]; ok {
+		return nil, errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+	if _, ok := k.lists[key]; ok {
+		return nil, errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+
+	stream, ok := k.streams[key]
+	if !ok {
+		return []StreamEntry{}, nil
+	}
+
+	return stream.Range(start, end)
+}
+
 // RunExpirationLoop handles the background expiration of keys
 func (k *Kv) RunExpirationLoop() {
 	ticker := time.NewTicker(1 * time.Second)

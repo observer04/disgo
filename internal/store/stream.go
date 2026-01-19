@@ -130,3 +130,68 @@ func (s *Stream) Add(idStr string, values []string) (string, error) {
 	s.Entries = append(s.Entries, entry)
 	return finalID, nil
 }
+
+// Range returns entries between start and end ID (inclusive).
+func (s *Stream) Range(start, end string) ([]StreamEntry, error) {
+	if len(s.Entries) == 0 {
+		return []StreamEntry{}, nil
+	}
+
+	startMs, startSeq, err := parseRangeID(start, false)
+	if err != nil {
+		return nil, err
+	}
+	endMs, endSeq, err := parseRangeID(end, true)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []StreamEntry
+	for _, entry := range s.Entries {
+		ms, seq := parseIDUnsafe(entry.ID)
+		
+		// Check start bound
+		if ms < startMs || (ms == startMs && seq < startSeq) {
+			continue
+		}
+		// Check end bound
+		if ms > endMs || (ms == endMs && seq > endSeq) {
+			continue // Assuming sorted, we could break here, but continue is safer for now
+		}
+		result = append(result, entry)
+	}
+	return result, nil
+}
+
+// parseRangeID parses start/end IDs for XRANGE.
+// isEnd controls behavior for incomplete IDs (e.g. "123").
+// if isEnd is true, "123" -> 123-MaxInt64. Else -> 123-0.
+func parseRangeID(id string, isEnd bool) (int64, int64, error) {
+	if id == "-" {
+		return 0, 0, nil
+	}
+	if id == "+" {
+		return 9223372036854775807, 9223372036854775807, nil // Max int64
+	}
+
+	parts := strings.Split(id, "-")
+	ms, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, 0, errors.New("ERR value is not an integer or out of range")
+	}
+
+	var seq int64
+	if len(parts) == 2 {
+		seq, err = strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return 0, 0, errors.New("ERR value is not an integer or out of range")
+		}
+	} else {
+		if isEnd {
+			seq = 9223372036854775807
+		} else {
+			seq = 0
+		}
+	}
+	return ms, seq, nil
+}
