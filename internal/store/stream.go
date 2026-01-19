@@ -43,6 +43,7 @@ func parseIDUnsafe(id string) (int64, int64) {
 	return ms, seq
 }
 
+// parseID parses a stream ID string into its millisecond and sequence components.
 func parseID(id string) (int64, int64, error) {
 	parts := strings.Split(id, "-")
 	if len(parts) != 2 {
@@ -66,26 +67,43 @@ func (s *Stream) Add(idStr string, values []string) (string, error) {
 		return "", errors.New("ERR The ID specified in XADD must be greater than 0-0")
 	}
 
-	lastMs, lastSeq := s.getLastID() //
+	lastMs, lastSeq := s.getLastID()
 	var newMs, newSeq int64
 
 	if idStr == "*" {
 		// Auto-generate ID
 		newMs = time.Now().UnixMilli()
-
 		// Ensure we don't go backward in time relative to the last entry
-		// (rare, but possible with clock skew)
 		if newMs < lastMs {
 			newMs = lastMs
 		}
-
 		if newMs == lastMs {
 			newSeq = lastSeq + 1
 		} else {
 			newSeq = 0
 		}
+		// Edge case: if generated ID is 0-0, bump to 0-1
+		if newMs == 0 && newSeq == 0 {
+			newSeq = 1
+		}
 
-		// Edge case: if generated ID is 0-0 (e.g. time is 0), bump to 0-1
+	} else if strings.HasSuffix(idStr, "-*") {
+		// Partial ID: "ms-*"
+		msStr := strings.TrimSuffix(idStr, "-*")
+		var err error
+		newMs, err = strconv.ParseInt(msStr, 10, 64)
+		if err != nil {
+			return "", errors.New("ERR value is not an integer or out of range")
+		}
+		if newMs < lastMs {
+			return "", errors.New("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+		}
+		if newMs == lastMs {
+			newSeq = lastSeq + 1
+		} else {
+			newSeq = 0
+		}
+		// Edge case: 0-* must resolve to at least 0-1
 		if newMs == 0 && newSeq == 0 {
 			newSeq = 1
 		}
@@ -96,17 +114,14 @@ func (s *Stream) Add(idStr string, values []string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-
 		if newMs == 0 && newSeq == 0 {
 			return "", errors.New("ERR The ID specified in XADD must be greater than 0-0")
 		}
-
 		// Validate monotonic increase
 		if newMs < lastMs || (newMs == lastMs && newSeq <= lastSeq) {
 			return "", errors.New("ERR The ID specified in XADD is equal or smaller than the target stream top item")
 		}
 	}
-
 	finalID := fmt.Sprintf("%d-%d", newMs, newSeq)
 	entry := StreamEntry{
 		ID:     finalID,

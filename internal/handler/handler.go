@@ -41,14 +41,14 @@ func ping(args []string, kv *store.Kv) (resp.Value, error) {
 
 func echo(args []string, kv *store.Kv) (resp.Value, error) {
 	if len(args) != 1 {
-		return nil, errors.New("ECHO requires exactly one argument")
+		return nil, errors.New("ERR ECHO requires exactly one argument")
 	}
 	return resp.BulkString(args[0]), nil
 }
 
 func get(args []string, kv *store.Kv) (resp.Value, error) {
 	if len(args) != 1 {
-		return nil, errors.New("GET requires exactly one argument")
+		return nil, errors.New("ERR GET requires exactly one argument")
 	}
 	val, ok := kv.Get(args[0])
 	if !ok {
@@ -60,7 +60,7 @@ func get(args []string, kv *store.Kv) (resp.Value, error) {
 // parse set
 func set(args []string, kv *store.Kv) (resp.Value, error) {
 	if len(args) < 2 {
-		return nil, errors.New("SET requires atleast two arguments")
+		return nil, errors.New("ERR SET requires atleast two arguments")
 	}
 	key := args[0]
 	value := args[1]
@@ -100,7 +100,7 @@ func set(args []string, kv *store.Kv) (resp.Value, error) {
 
 func rpush(args []string, kv *store.Kv) (resp.Value, error) {
 	if len(args) < 2 {
-		return nil, errors.New("RPUSH requires at least two arguments")
+		return nil, errors.New("ERR RPUSH requires at least two arguments")
 	}
 	key := args[0]
 	values := args[1:]
@@ -112,7 +112,7 @@ func rpush(args []string, kv *store.Kv) (resp.Value, error) {
 
 func lrange(args []string, kv *store.Kv) (resp.Value, error) {
 	if len(args) != 3 {
-		return nil, errors.New("LRANGE requires exactly three arguments")
+		return nil, errors.New("ERR LRANGE requires exactly three arguments")
 	}
 	key := args[0]
 	start, err := strconv.Atoi(args[1])
@@ -137,7 +137,7 @@ func lrange(args []string, kv *store.Kv) (resp.Value, error) {
 
 func lpush(args []string, kv *store.Kv) (resp.Value, error) {
 	if len(args) < 2 {
-		return nil, errors.New("LPUSH requires at least two arguments")
+		return nil, errors.New("ERR LPUSH requires at least two arguments")
 	}
 	key := args[0]
 	values := args[1:]
@@ -154,12 +154,12 @@ func lpush(args []string, kv *store.Kv) (resp.Value, error) {
 
 func blpop(args []string, kv *store.Kv) (resp.Value, error) {
 	if len(args) != 2 {
-		return nil, errors.New("BLPOP requires exactly two arguments: key and timeout")
+		return nil, errors.New("ERR BLPOP requires exactly two arguments: key and timeout")
 	}
 	key := args[0]
 	timeoutSec, err := strconv.ParseFloat(args[1], 64)
 	if err != nil || timeoutSec < 0 {
-		return nil, errors.New("invalid timeout")
+		return nil, errors.New("ERR invalid timeout")
 	}
 
 	// Try immediate pop or register waiter
@@ -196,7 +196,7 @@ func blpop(args []string, kv *store.Kv) (resp.Value, error) {
 
 func llen(args []string, kv *store.Kv) (resp.Value, error) {
 	if len(args) != 1 {
-		return nil, errors.New("LLEN requires exactly one argument")
+		return nil, errors.New("ERR LLEN requires exactly one argument")
 	}
 	key := args[0]
 	length := kv.LLen(key)
@@ -205,7 +205,7 @@ func llen(args []string, kv *store.Kv) (resp.Value, error) {
 
 func lpop(args []string, kv *store.Kv) (resp.Value, error) {
 	if len(args) < 1 || len(args) > 2 {
-		return nil, errors.New("LPOP requires one or two arguments")
+		return nil, errors.New("ERR LPOP requires one or two arguments")
 	}
 	key := args[0]
 	n := 1

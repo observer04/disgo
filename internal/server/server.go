@@ -71,7 +71,7 @@ func HandleClient(con net.Conn, kv *store.Kv, handlers map[string]handler.Handle
 		cmd := strings.ToUpper(args[0])
 		cmdHandler, ok := handlers[cmd]
 		if !ok {
-			errMsg := "-Err unknown command\r\n"
+			errMsg := "-ERR unknown command\r\n"
 			w.WriteString(errMsg)
 			w.Flush()
 			continue
@@ -79,7 +79,7 @@ func HandleClient(con net.Conn, kv *store.Kv, handlers map[string]handler.Handle
 
 		response, err := cmdHandler(args[1:], kv)
 		if err != nil {
-			errMsg := fmt.Sprintf("-Err %s\r\n", err.Error())
+			errMsg := fmt.Sprintf("-%s\r\n", err.Error())
 			w.WriteString(errMsg)
 			w.Flush()
 			continue

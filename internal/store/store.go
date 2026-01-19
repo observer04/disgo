@@ -234,6 +234,14 @@ func (k *Kv) XAdd(key, id string, values []string) (string, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
+	// Check for collision with other types
+	if _, ok := k.data[key]; ok {
+		return "", errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+	if _, ok := k.lists[key]; ok {
+		return "", errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+
 	stream, ok := k.streams[key]
 	if !ok {
 		stream = NewStream()
