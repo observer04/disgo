@@ -29,6 +29,7 @@ func GetHandlers() map[string]Handler {
 		"TYPE":   typeCmd,
 		"XADD":   xadd,
 		"XRANGE": xrange,
+		"XREAD":  xread,
 	}
 }
 

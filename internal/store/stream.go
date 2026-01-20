@@ -25,14 +25,29 @@ func NewStream() *Stream {
 	}
 }
 
-// getLastID returns the timestamp and sequence of the last entry.
-// Returns 0, 0 if empty (which conceptually acts as 0-0 being the "previous" ID).
-func (s *Stream) getLastID() (int64, int64) {
+// GetLastID returns the ID of the last entry or "0-0" if empty.
+func (s *Stream) GetLastID() string {
 	if len(s.Entries) == 0 {
-		return 0, 0
+		return "0-0"
 	}
-	last := s.Entries[len(s.Entries)-1]
-	return parseIDUnsafe(last.ID)
+	return s.Entries[len(s.Entries)-1].ID
+}
+
+// Read returns all entries with an ID strictly greater than startID.
+func (s *Stream) Read(startID string) ([]StreamEntry, error) {
+	startMs, startSeq, err := parseID(startID)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []StreamEntry
+	for _, entry := range s.Entries {
+		ms, seq := parseIDUnsafe(entry.ID)
+		if ms > startMs || (ms == startMs && seq > startSeq) {
+			result = append(result, entry)
+		}
+	}
+	return result, nil
 }
 
 func parseIDUnsafe(id string) (int64, int64) {
@@ -67,7 +82,8 @@ func (s *Stream) Add(idStr string, values []string) (string, error) {
 		return "", errors.New("ERR The ID specified in XADD must be greater than 0-0")
 	}
 
-	lastMs, lastSeq := s.getLastID()
+	lastID := s.GetLastID()
+	lastMs, lastSeq := parseIDUnsafe(lastID)
 	var newMs, newSeq int64
 
 	if idStr == "*" {
@@ -149,7 +165,7 @@ func (s *Stream) Range(start, end string) ([]StreamEntry, error) {
 	var result []StreamEntry
 	for _, entry := range s.Entries {
 		ms, seq := parseIDUnsafe(entry.ID)
-		
+
 		// Check start bound
 		if ms < startMs || (ms == startMs && seq < startSeq) {
 			continue
