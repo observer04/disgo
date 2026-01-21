@@ -1,7 +1,6 @@
 package store
 
 import (
-	"errors"
 	"sync"
 	"time"
 )
@@ -24,6 +23,9 @@ type Kv struct {
 
 	// Configuration
 	config map[string]string
+
+	// Pub/Sub
+	subs map[string]map[chan interface{}]struct{}
 }
 
 // constructor function for Kv
@@ -39,6 +41,7 @@ func NewKv(dir, dbfilename string) *Kv {
 			"dir":        dir,
 			"dbfilename": dbfilename,
 		},
+		subs: make(map[string]map[chan interface{}]struct{}),
 	}
 }
 
@@ -47,59 +50,6 @@ func (k *Kv) GetConfig(key string) string {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	return k.config[key]
-}
-
-// SetWithTTL stores the key-value pair in the Kv store with an optional TTL
-func (k *Kv) SetWithTTL(key, value string, ttl time.Duration) {
-	var deadline time.Time
-	if ttl > 0 {
-		deadline = time.Now().Add(ttl)
-	}
-	k.SetWithDeadline(key, value, deadline)
-}
-
-// SetWithDeadline stores key-value with an absolute expiration time.
-// If deadline is zero, the key persists.
-// If deadline is in the past, the key is deleted (or not set).
-func (k *Kv) SetWithDeadline(key, value string, deadline time.Time) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-
-	if !deadline.IsZero() && !deadline.After(time.Now()) {
-		// Expired.
-		delete(k.data, key)
-		delete(k.exp, key)
-		return
-	}
-
-	k.data[key] = value
-	if !deadline.IsZero() {
-		k.exp[key] = deadline
-	} else {
-		delete(k.exp, key)
-	}
-}
-
-// without expiration
-func (k *Kv) Set(key, value string) {
-	k.SetWithTTL(key, value, 0)
-}
-
-func (k *Kv) Get(key string) (string, bool) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-
-	// Check for expiration
-	if expTime, ok := k.exp[key]; ok {
-		if time.Now().After(expTime) {
-			// Key has expired
-			delete(k.data, key)
-			delete(k.exp, key)
-			return "", false
-		}
-	}
-	val, ok := k.data[key]
-	return val, ok
 }
 
 // Keys returns all keys matching the pattern.
@@ -121,142 +71,6 @@ func (k *Kv) Keys(pattern string) []string {
 		}
 	}
 	return keys
-}
-
-// list operations:
-// RPUSH : append values to the list stored at key
-func (k *Kv) RPush(key string, values ...string) int {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-
-	// Append all values first so the returned length reflects the list
-	// size immediately after the RPUSH. Then deliver elements to any
-	// waiters (FIFO) by popping from the list and sending the value.
-
-	// append values
-	k.lists[key] = append(k.lists[key], values...)
-	pushedLen := len(k.lists[key])
-
-	// deliver to waiters while both waiters and list items exist
-	for len(k.waiters[key]) > 0 && len(k.lists[key]) > 0 {
-		ch := k.waiters[key][0]
-		k.waiters[key] = k.waiters[key][1:]
-		// pop first element
-		val := k.lists[key][0]
-		k.lists[key] = k.lists[key][1:]
-		// deliver without blocking; channel is buffered but use goroutine as fallback
-		select {
-		case ch <- val:
-		default:
-			go func(c chan string, v string) { c <- v }(ch, val)
-		}
-	}
-	return pushedLen
-}
-
-// LRANGE: get elements from list stored at key
-func (k *Kv) LRange(key string, start, stop int) ([]string, error) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	list, ok := k.lists[key]
-	if !ok {
-		return []string{}, nil
-	}
-	n := len(list)
-
-	// convert negative indices to absolute positions
-	if start < 0 {
-		start = n + start
-	}
-	if stop < 0 {
-		stop = n + stop
-	}
-
-	// if negative index is out of range, treat as 0
-	if start < 0 {
-		start = 0
-	}
-	if stop < 0 {
-		stop = 0
-	}
-
-	if start >= n || start > stop {
-		return []string{}, nil
-	}
-	if stop >= n {
-		stop = n - 1
-	}
-	return list[start : stop+1], nil
-}
-
-// LPush: prepend values to the list stored at key
-func (k *Kv) LPush(key string, values ...string) int {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	// Prepend values in reverse order so the given order is preserved
-	for i := len(values) - 1; i >= 0; i-- {
-		k.lists[key] = append([]string{values[i]}, k.lists[key]...)
-	}
-	return len(k.lists[key])
-}
-
-// LLen: get length of list stored at key
-func (k *Kv) LLen(key string) int64 {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	return int64(len(k.lists[key]))
-}
-
-// LPop: remove and return the first element OR the n first elements if n is provided
-func (k *Kv) LPop(key string, n int) ([]string, error) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	list, ok := k.lists[key]
-	if !ok || len(list) == 0 {
-		return nil, errors.New("list is empty or does not exist")
-	}
-	if n <= 0 {
-		n = 1
-	}
-	if n > len(list) {
-		n = len(list)
-	}
-	vals := make([]string, n)
-	copy(vals, list[:n])
-	k.lists[key] = list[n:]
-	return vals, nil
-}
-
-// BlockingPop tries to pop a value immediately. If not found, it waits.
-// Returns value, true if popped immediately.
-// Returns channel, false if waiting.
-func (k *Kv) BlockingPop(key string) (string, <-chan string, bool) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-
-	if list, ok := k.lists[key]; ok && len(list) > 0 {
-		val := list[0]
-		k.lists[key] = list[1:]
-		return val, nil, true
-	}
-
-	// No element available: set up a waiter
-	ch := make(chan string, 1)
-	k.waiters[key] = append(k.waiters[key], ch)
-	return "", ch, false
-}
-
-// RemoveWaiter removes the channel from the waiters list for the key
-func (k *Kv) RemoveWaiter(key string, ch <-chan string) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	waiters := k.waiters[key]
-	for i, w := range waiters {
-		if w == ch { // Note: this comparison might need casting if types strictly don't match, but here ch came from append
-			k.waiters[key] = append(waiters[:i], waiters[i+1:]...)
-			break
-		}
-	}
 }
 
 // Type returns the string representation of the value's type.
@@ -285,159 +99,6 @@ func (k *Kv) Type(key string) string {
 		return "stream"
 	}
 	return "none"
-}
-
-// XAdd appends an entry to a stream. Creates the stream if it doesn't exist.
-func (k *Kv) XAdd(key, id string, values []string) (string, error) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-
-	// Check for collision with other types
-	if _, ok := k.data[key]; ok {
-		return "", errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
-	}
-	if _, ok := k.lists[key]; ok {
-		return "", errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
-	}
-
-	stream, ok := k.streams[key]
-	if !ok {
-		stream = NewStream()
-		k.streams[key] = stream
-	}
-
-	id, err := stream.Add(id, values)
-	if err != nil {
-		return "", err
-	}
-
-	// Notify waiters
-	if waiters, ok := k.streamWaiters[key]; ok {
-		for _, ch := range waiters { // send to all waiters
-			// Non-blocking send
-			select {
-			case ch <- key:
-			default: // if channel is full, skip
-			}
-		}
-	}
-
-	return id, nil
-}
-
-// XRange returns a range of entries from a stream.
-func (k *Kv) XRange(key, start, end string) ([]StreamEntry, error) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-
-	// Check type> key shouldnt have anything except stream
-	if _, ok := k.data[key]; ok {
-		return nil, errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
-	}
-	if _, ok := k.lists[key]; ok {
-		return nil, errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
-	}
-
-	stream, ok := k.streams[key]
-	if !ok {
-		return []StreamEntry{}, nil
-	}
-
-	return stream.Range(start, end)
-}
-
-// XRead returns entries from multiple streams starting from the given IDs.
-func (k *Kv) XRead(streams map[string]string) (map[string][]StreamEntry, error) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-
-	result := make(map[string][]StreamEntry)
-
-	for key, startID := range streams {
-		// Check type
-		if _, ok := k.data[key]; ok {
-			return nil, errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
-		}
-		if _, ok := k.lists[key]; ok {
-			return nil, errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
-		}
-
-		stream, ok := k.streams[key]
-		if !ok {
-			continue // Key doesn't exist, skip
-		}
-
-		// Handle "$" special ID (returns no entries, just meant for blocking later,
-		// but if called in non-blocking XREAD, it simply returns empty)
-		if startID == "$" {
-			// In XREAD (non-blocking), $ theoretically means "messages strictly greater than max ID"
-			// which is nothing. So we skip.
-			// However, the caller usually resolves "$" to the actual last ID before calling this if blocking.
-			// For non-blocking, XREAD STREAMS key $ returns empty.
-			continue
-		}
-
-		entries, err := stream.Read(startID)
-		if err != nil {
-			return nil, err
-		}
-		if len(entries) > 0 {
-			result[key] = entries
-		}
-	}
-
-	return result, nil
-}
-
-// NewStreamWaiter registers a new waiter channel for the given keys.
-func (k *Kv) NewStreamWaiter(keys []string) chan string {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-
-	ch := make(chan string, len(keys)) // Buffered to avoid blocking sender;
-	for _, key := range keys {
-		k.streamWaiters[key] = append(k.streamWaiters[key], ch)
-	}
-	return ch
-}
-
-// RemoveStreamWaiter removes the waiter channel for the given keys.
-func (k *Kv) RemoveStreamWaiter(keys []string, ch chan string) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	//
-	for _, key := range keys {
-		waiters := k.streamWaiters[key]
-		for i, w := range waiters {
-			if w == ch {
-				k.streamWaiters[key] = append(waiters[:i], waiters[i+1:]...)
-				break
-			}
-		}
-		// Clean up empty key entries if desired, but not strictly necessary
-		if len(k.streamWaiters[key]) == 0 {
-			delete(k.streamWaiters, key)
-		}
-	}
-}
-
-// GetLastID returns the last ID of a stream. Returns "0-0" if empty or key doesn't exist.
-func (k *Kv) GetLastID(key string) (string, error) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-
-	if _, ok := k.data[key]; ok {
-		return "", errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
-	}
-	if _, ok := k.lists[key]; ok {
-		return "", errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
-	}
-
-	stream, ok := k.streams[key]
-	if !ok {
-		return "0-0", nil // Treat missing key as empty stream
-	}
-	return stream.GetLastID(), nil
 }
 
 // RunExpirationLoop handles the background expiration of keys

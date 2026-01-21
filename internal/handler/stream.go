@@ -10,7 +10,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
-func xadd(args []string, kv *store.Kv) (resp.Value, error) {
+func xadd(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) < 4 || (len(args)-2)%2 != 0 {
 		return nil, errors.New("ERR wrong number of arguments for 'xadd' command")
 	}
@@ -27,7 +27,7 @@ func xadd(args []string, kv *store.Kv) (resp.Value, error) {
 	return resp.BulkString(newID), nil
 }
 
-func xrange(args []string, kv *store.Kv) (resp.Value, error) {
+func xrange(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) != 3 {
 		return nil, errors.New("ERR wrong number of arguments for 'xrange' command")
 	}
@@ -60,7 +60,7 @@ func xrange(args []string, kv *store.Kv) (resp.Value, error) {
 	return respEntries, nil
 }
 
-func xread(args []string, kv *store.Kv) (resp.Value, error) {
+func xread(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	var blockTime int64 = -1 // -1 means no block
 	streamsArgIdx := -1      // index of "STREAMS" argument
 

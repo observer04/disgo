@@ -54,52 +54,65 @@ func Start(dir, dbfilename string) {
 }
 
 func HandleClient(con net.Conn, kv *store.Kv, handlers map[string]handler.Handler) {
-	defer con.Close()
-	r := bufio.NewReader(con)
-	w := bufio.NewWriter(con)
+	// We need to support concurrent reading (commands) and writing (pub/sub messages)
+	// Create a channel for messages destined for this client
+	msgCh := make(chan interface{}, 100) // buffer to avoid blocking
+	defer close(msgCh)
+	// We also need to clean up subscriptions on exit
+	// But `kv.Unsubscribe` requires the channel.
+	// The store doesn't support "UnsubscribeAll".
+	// We can track subscribed channels here.
+	// But `subscribe` handler is where subscription happens.
+	// We don't have visibility here.
+	// Ideally `kv` should support `UnsubscribeAll(ch)`.
+	// For now, if we don't unsubscribe, the map grows.
+	// Let's implement `UnsubscribeAll` in store.
 
+	// Write Loop
+	go func() {
+		defer con.Close()
+		w := bufio.NewWriter(con)
+		for msg := range msgCh {
+			if err := resp.Write(w, msg); err != nil {
+				return // connection likely closed
+			}
+			w.Flush()
+		}
+	}()
+
+	// Read Loop
+	r := bufio.NewReader(con)
 	for {
 		args, err := resp.Read(r)
-
-		if errors.Is(err, io.EOF) {
-			log.Print("EOF reached")
-			return
-		}
 		if err != nil {
-			log.Printf("problem reading from connection: %v", err)
+			if errors.Is(err, io.EOF) {
+				// Clean disconnect
+			} else {
+				log.Printf("problem reading from connection: %v", err)
+			}
+			// Unsubscribe from all (Todo: implement efficiently)
+			kv.UnsubscribeAll(msgCh)
 			return
 		}
 		if len(args) == 0 {
-			log.Print("empty command received")
 			continue
 		}
 
 		cmd := strings.ToUpper(args[0])
 		cmdHandler, ok := handlers[cmd]
 		if !ok {
-			errMsg := "-ERR unknown command\r\n"
-			w.WriteString(errMsg)
-			w.Flush()
+			msgCh <- resp.Error(fmt.Sprintf("ERR unknown command '%s'", args[0]))
 			continue
 		}
 
-		response, err := cmdHandler(args[1:], kv)
+		response, err := cmdHandler(args[1:], kv, msgCh)
 		if err != nil {
-			errMsg := fmt.Sprintf("-%s\r\n", err.Error())
-			w.WriteString(errMsg)
-			w.Flush()
+			msgCh <- resp.Error(err.Error())
 			continue
 		}
 
-		if err := resp.Write(w, response); err != nil {
-			log.Printf("problem writing response: %v", err)
-			return
+		if response != nil {
+			msgCh <- response
 		}
-		if err := w.Flush(); err != nil {
-			log.Printf("problem flushing response: %v", err)
-			return
-		}
-
-		log.Printf("Received Data: %q", args)
 	}
 }

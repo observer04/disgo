@@ -13,10 +13,12 @@ import (
 type Value interface{}
 
 type SimpleString string
+type Error string
 type BulkString string
 type Integer int64
 type Array []Value
 type NullArray struct{}
+type NullBulkString struct{}
 
 // validate and read a line ending with CRLF
 func readLineCRLF(r *bufio.Reader) (string, error) {
@@ -90,7 +92,7 @@ func Read(r *bufio.Reader) ([]string, error) {
 // write RESP value to writer
 func Write(w *bufio.Writer, val Value) error {
 	switch v := val.(type) { // reason is that Go does not allow switch on types directly so we use type assertion
-	case nil:
+	case NullBulkString:
 		// Null bulk string
 		_, err := w.WriteString("$-1\r\n")
 		return err
@@ -99,6 +101,11 @@ func Write(w *bufio.Writer, val Value) error {
 		return err
 	case SimpleString:
 		if _, err := w.WriteString(fmt.Sprintf("+%s\r\n", string(v))); err != nil { //eg: +OK\r\n
+			return err
+		}
+		return nil
+	case Error:
+		if _, err := w.WriteString(fmt.Sprintf("-%s\r\n", string(v))); err != nil {
 			return err
 		}
 		return nil
