@@ -21,10 +21,13 @@ type Kv struct {
 	// streamWaiters holds channels for clients blocked on XREAD for a given key.
 	// The channel receives the key name when a new entry is added.
 	streamWaiters map[string][]chan string
+
+	// Configuration
+	config map[string]string
 }
 
 // constructor function for Kv
-func NewKv() *Kv {
+func NewKv(dir, dbfilename string) *Kv {
 	return &Kv{
 		data:          make(map[string]string),
 		exp:           make(map[string]time.Time),
@@ -32,7 +35,18 @@ func NewKv() *Kv {
 		streams:       make(map[string]*Stream),
 		waiters:       make(map[string][]chan string),
 		streamWaiters: make(map[string][]chan string),
+		config: map[string]string{
+			"dir":        dir,
+			"dbfilename": dbfilename,
+		},
 	}
+}
+
+// GetConfig returns the value of a configuration parameter
+func (k *Kv) GetConfig(key string) string {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.config[key]
 }
 
 // Set stores the key-value pair in the Kv store with an optional TTL
@@ -67,6 +81,27 @@ func (k *Kv) Get(key string) (string, bool) {
 	}
 	val, ok := k.data[key]
 	return val, ok
+}
+
+// Keys returns all keys matching the pattern.
+// Currently only supports "*"
+func (k *Kv) Keys(pattern string) []string {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	var keys []string
+	for key := range k.data { // only string keys for now; lists and streams can be added similarly
+		// simple implementation for "*"
+		if pattern == "*" {
+			keys = append(keys, key)
+		} else {
+			// fallback/todo: implement glob matching
+			if key == pattern {
+				keys = append(keys, key)
+			}
+		}
+	}
+	return keys
 }
 
 // list operations:
@@ -340,7 +375,7 @@ func (k *Kv) NewStreamWaiter(keys []string) chan string {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
-	ch := make(chan string, len(keys)) // Buffered to avoid blocking sender
+	ch := make(chan string, len(keys)) // Buffered to avoid blocking sender;
 	for _, key := range keys {
 		k.streamWaiters[key] = append(k.streamWaiters[key], ch)
 	}
@@ -351,7 +386,7 @@ func (k *Kv) NewStreamWaiter(keys []string) chan string {
 func (k *Kv) RemoveStreamWaiter(keys []string, ch chan string) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-
+	//
 	for _, key := range keys {
 		waiters := k.streamWaiters[key]
 		for i, w := range waiters {

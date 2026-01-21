@@ -10,11 +10,12 @@ import (
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/internal/handler"
+	"github.com/codecrafters-io/redis-starter-go/internal/rdb"
 	"github.com/codecrafters-io/redis-starter-go/internal/resp"
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
-func Start() {
+func Start(dir, dbfilename string) {
 	fmt.Println("Logs from your program will appear here!")
 
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
@@ -26,7 +27,12 @@ func Start() {
 	fmt.Println("Server listening on 6379")
 
 	// Initialize key-value store
-	kvStore := store.NewKv()
+	kvStore := store.NewKv(dir, dbfilename)
+
+	// Load RDB file if it exists
+	if err := rdb.Load(dir, dbfilename, kvStore); err != nil {
+		log.Printf("Failed to load RDB file: %v", err)
+	}
 
 	// Start background expiration loop
 	go kvStore.RunExpirationLoop()
