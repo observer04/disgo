@@ -12,6 +12,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
+// RDB opcodes and types; purpose: only implement what is necessary to load string keys.
 const (
 	OpAux        = 0xFA
 	OpResizeDB   = 0xFB
@@ -39,6 +40,7 @@ func Load(dir, dbfilename string, kv *store.Kv) error {
 
 	r := bufio.NewReader(f)
 
+	// Load RDB contents
 	// 1. Header: "REDIS"
 	header := make([]byte, 5)
 	if _, err := io.ReadFull(r, header); err != nil {
@@ -55,7 +57,7 @@ func Load(dir, dbfilename string, kv *store.Kv) error {
 
 	var expiry *time.Time
 
-	for {
+	for { // Read opcodes until EOF; for simplicity, we assume a flat structure with only string keys
 		b, err := r.ReadByte()
 		if err != nil {
 			return err
@@ -121,7 +123,7 @@ func Load(dir, dbfilename string, kv *store.Kv) error {
 					return err
 				}
 				if expiry != nil {
-					kv.SetWithTTL(key, val, time.Until(*expiry))
+					kv.SetWithDeadline(key, val, *expiry)
 				} else {
 					kv.Set(key, val)
 				}

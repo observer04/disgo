@@ -49,16 +49,35 @@ func (k *Kv) GetConfig(key string) string {
 	return k.config[key]
 }
 
-// Set stores the key-value pair in the Kv store with an optional TTL
+// SetWithTTL stores the key-value pair in the Kv store with an optional TTL
 func (k *Kv) SetWithTTL(key, value string, ttl time.Duration) {
-	k.mu.Lock()
-	k.data[key] = value
+	var deadline time.Time
 	if ttl > 0 {
-		k.exp[key] = time.Now().Add(ttl)
+		deadline = time.Now().Add(ttl)
+	}
+	k.SetWithDeadline(key, value, deadline)
+}
+
+// SetWithDeadline stores key-value with an absolute expiration time.
+// If deadline is zero, the key persists.
+// If deadline is in the past, the key is deleted (or not set).
+func (k *Kv) SetWithDeadline(key, value string, deadline time.Time) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	if !deadline.IsZero() && !deadline.After(time.Now()) {
+		// Expired.
+		delete(k.data, key)
+		delete(k.exp, key)
+		return
+	}
+
+	k.data[key] = value
+	if !deadline.IsZero() {
+		k.exp[key] = deadline
 	} else {
 		delete(k.exp, key)
 	}
-	k.mu.Unlock()
 }
 
 // without expiration
