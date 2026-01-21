@@ -12,12 +12,13 @@ func subscribe(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value,
 
 	for _, channel := range args {
 		kv.Subscribe(channel, msgCh)
-		
+		count := kv.GetSubscriptionCount(msgCh)
+
 		// Send message to msgCh
 		msg := resp.Array{
 			resp.BulkString("subscribe"),
 			resp.BulkString(channel),
-			resp.Integer(1), // TODO: Fix this count
+			resp.Integer(int64(count)),
 		}
 		msgCh <- msg
 	}

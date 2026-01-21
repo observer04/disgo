@@ -56,3 +56,17 @@ func (k *Kv) UnsubscribeAll(ch chan interface{}) {
 		delete(subs, ch)
 	}
 }
+
+// GetSubscriptionCount returns the number of channels the client is subscribed to.
+func (k *Kv) GetSubscriptionCount(ch chan interface{}) int {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	count := 0
+	for _, subs := range k.subs {
+		if _, ok := subs[ch]; ok {
+			count++
+		}
+	}
+	return count
+}
