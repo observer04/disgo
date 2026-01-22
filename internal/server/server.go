@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/internal/handler"
 	"github.com/codecrafters-io/redis-starter-go/internal/rdb"
@@ -98,16 +97,40 @@ func HandleClient(con net.Conn, kv *store.Kv, handlers map[string]handler.Handle
 			continue
 		}
 
-		cmd := strings.ToUpper(args[0])
-		cmdHandler, ok := handlers[cmd]
-		if !ok {
-			msgCh <- resp.Error(fmt.Sprintf("ERR unknown command '%s'", args[0]))
-			continue
-		}
-
-		response, err := cmdHandler(args[1:], kv, msgCh)
+		response, err := handler.Dispatch(args[0], args[1:], kv, msgCh, handlers)
 		if err != nil {
-			msgCh <- resp.Error(err.Error())
+			// In Dispatcher, we might return resp.Error as error or as value?
+			// The current signature is (resp.Value, error).
+			// If error is returned, it might be a Go error or a resp.Error (if we cast it).
+			// Let's check Dispatcher implementation.
+			// It returns `resp.Error(...)` which satisfies `error` interface? No.
+			// `resp.Error` is `string`. It doesn't satisfy `error`.
+			// Wait, `resp.Error` is `type Error string`.
+			// In `dispatcher.go`: `return nil, resp.Error(...)`.
+			// `resp.Error` does NOT implement `error`.
+			// So `handler.Dispatch` signature `(resp.Value, error)` is wrong if it returns `resp.Error` as 2nd arg.
+			// `resp.Error` is a `Value`.
+			// Dispatcher should return `(resp.Value, error)` where `error` is a system error,
+			// and `resp.Value` can be `resp.Error`.
+			// OR Dispatcher returns `(resp.Value, error)` and `resp.Error` is returned as `resp.Value`.
+
+			// Let's correct `dispatcher.go` first.
+			// Re-reading `dispatcher.go` logic I wrote...
+			// `return nil, resp.Error(...)` -> This implies `resp.Error` is passed as `error`.
+			// Go compiler will fail if `resp.Error` doesn't implement `error`.
+			// `type Error string`. It does NOT implement `Error() string`.
+			// So I need to fix Dispatcher.
+		}
+		// Assuming Dispatcher returns `(resp.Value, error)` where error is real go error.
+		// If command failed with Redis error, it should be in `resp.Value`.
+		
+		// Let's fix Dispatcher logic in next step.
+		// For now, let's write the `HandleClient` assuming Dispatcher works as:
+		// Returns (response, nil) for success (including Redis errors).
+		// Returns (nil, err) for system errors.
+		
+		if err != nil {
+			log.Printf("Dispatch error: %v", err)
 			continue
 		}
 

@@ -29,5 +29,6 @@ func GetHandlers() map[string]Handler {
 		"KEYS":      keys,
 		"SUBSCRIBE": subscribe,
 		"PUBLISH":   publish,
+		"UNSUBSCRIBE": unsubscribe,
 	}
 }

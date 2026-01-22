@@ -9,6 +9,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
+// rpush: append one or more values to the end of a list
 func rpush(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) < 2 {
 		return nil, errors.New("ERR RPUSH requires at least two arguments")
@@ -21,6 +22,7 @@ func rpush(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, err
 	return resp.Integer(pushedLen), nil
 }
 
+// lrange: get a range of elements from a list; start and stop are inclusive
 func lrange(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) != 3 {
 		return nil, errors.New("ERR LRANGE requires exactly three arguments")
@@ -46,6 +48,7 @@ func lrange(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, er
 	return respArray, nil
 }
 
+// lpush: prepend one or more values to the start of a list; values are inserted from left to right;
 func lpush(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) < 2 {
 		return nil, errors.New("ERR LPUSH requires at least two arguments")
@@ -63,6 +66,7 @@ func lpush(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, err
 	return resp.Integer(pushedLen), nil
 }
 
+// blpop: remove and get the first element in a list, or block until one is available; timeout in seconds; 0 means block indefinitely
 func blpop(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) != 2 {
 		return nil, errors.New("ERR BLPOP requires exactly two arguments: key and timeout")
@@ -105,6 +109,7 @@ func blpop(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, err
 	}
 }
 
+// llen: get the length of a list
 func llen(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) != 1 {
 		return nil, errors.New("ERR LLEN requires exactly one argument")
@@ -114,6 +119,7 @@ func llen(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, erro
 	return resp.Integer(length), nil
 }
 
+// lpop: remove and get the first element in a list; with optional count argument
 func lpop(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return nil, errors.New("ERR LPOP requires one or two arguments")

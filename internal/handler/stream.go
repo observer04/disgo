@@ -10,6 +10,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
+// xadd: adds an entry to a stream; returns the ID of the added entry; syntax: XADD key id field value [field value ...]
 func xadd(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) < 4 || (len(args)-2)%2 != 0 {
 		return nil, errors.New("ERR wrong number of arguments for 'xadd' command")
@@ -27,6 +28,7 @@ func xadd(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, erro
 	return resp.BulkString(newID), nil
 }
 
+// xrange: gets a range of entries from a stream; syntax: XRANGE key start end; start and end are IDs
 func xrange(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) != 3 {
 		return nil, errors.New("ERR wrong number of arguments for 'xrange' command")
@@ -60,6 +62,7 @@ func xrange(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, er
 	return respEntries, nil
 }
 
+// xread: reads entries from one or more streams; supports blocking; syntax: XREAD [BLOCK milliseconds] STREAMS key [key ...] id [id ...]
 func xread(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	var blockTime int64 = -1 // -1 means no block
 	streamsArgIdx := -1      // index of "STREAMS" argument
@@ -165,20 +168,22 @@ func xread(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, err
 	return formatXReadResponse(keys, res), nil
 }
 
+// formatXReadResponse: helper to format the XREAD response
 func formatXReadResponse(keys []string, data map[string][]store.StreamEntry) resp.Value {
 	// Response is Array of Arrays: [[Key, [[ID, [Key, Val...]], ...]], ...]
 	// Order must match the order of keys in arguments.
 	var topLevel resp.Array
 
-	for _, key := range keys {
+	for _, key := range keys { // preserve order
 		entries, ok := data[key]
 		if !ok || len(entries) == 0 {
 			continue
 		}
 
-		streamArr := resp.Array{}
-		streamArr = append(streamArr, resp.BulkString(key))
+		streamArr := resp.Array{}                           // [Key, [Entries]]
+		streamArr = append(streamArr, resp.BulkString(key)) // First element is the stream key
 
+		// Entries array
 		entriesArr := resp.Array{}
 		for _, e := range entries {
 			id := resp.BulkString(e.ID)
@@ -186,7 +191,7 @@ func formatXReadResponse(keys []string, data map[string][]store.StreamEntry) res
 			for _, v := range e.Values {
 				vals = append(vals, resp.BulkString(v))
 			}
-			entriesArr = append(entriesArr, resp.Array{id, vals})
+			entriesArr = append(entriesArr, resp.Array{id, vals}) // Single entry: [ID, [Values]]
 		}
 		streamArr = append(streamArr, entriesArr)
 		topLevel = append(topLevel, streamArr)

@@ -5,10 +5,10 @@ func (k *Kv) Subscribe(channel string, ch chan interface{}) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
-	if _, ok := k.subs[channel]; !ok {
+	if _, ok := k.subs[channel]; !ok { // make map if not exists for channel
 		k.subs[channel] = make(map[chan interface{}]struct{})
 	}
-	k.subs[channel][ch] = struct{}{}
+	k.subs[channel][ch] = struct{}{} // add channel to subscribers
 }
 
 // Unsubscribe removes the client channel from the subscription list.
@@ -18,7 +18,7 @@ func (k *Kv) Unsubscribe(channel string, ch chan interface{}) {
 
 	if subs, ok := k.subs[channel]; ok {
 		delete(subs, ch)
-		if len(subs) == 0 {
+		if len(subs) == 0 { // remove channel map if empty
 			delete(k.subs, channel)
 		}
 	}

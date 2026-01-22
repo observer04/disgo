@@ -8,6 +8,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
+// typeCmd: returns the type of the value stored at key
 func typeCmd(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) != 1 {
 		return nil, errors.New("TYPE requires exactly one argument")
@@ -17,6 +18,7 @@ func typeCmd(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, e
 	return resp.SimpleString(res), nil
 }
 
+// config: gets or sets configuration parameters; currently only supports GET subcommand
 func config(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) < 2 {
 		return nil, errors.New("ERR CONFIG requires at least two arguments")
@@ -36,15 +38,16 @@ func config(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, er
 	return nil, errors.New("ERR unknown CONFIG subcommand")
 }
 
+// keys: returns all keys matching the given pattern;
 func keys(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) != 1 {
 		return nil, errors.New("ERR KEYS requires exactly one argument")
 	}
 
 	pattern := args[0]
-	keys := kv.Keys(pattern)
+	keys := kv.Keys(pattern) // []string of matching keys
 
-	respKeys := make(resp.Array, len(keys))
+	respKeys := make(resp.Array, len(keys)) //convert []string to Array of BulkString
 	for i, k := range keys {
 		respKeys[i] = resp.BulkString(k)
 	}

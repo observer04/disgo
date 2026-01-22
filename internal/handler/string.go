@@ -10,6 +10,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
+// ping: simple ping command
 func ping(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) == 0 {
 		return resp.SimpleString("PONG"), nil
@@ -18,6 +19,7 @@ func ping(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, erro
 	return resp.BulkString(args[0]), nil
 }
 
+// echo: echo the given string
 func echo(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) != 1 {
 		return nil, errors.New("ERR ECHO requires exactly one argument")
@@ -25,6 +27,7 @@ func echo(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, erro
 	return resp.BulkString(args[0]), nil
 }
 
+// get: gets the value of a key
 func get(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) != 1 {
 		return nil, errors.New("ERR GET requires exactly one argument")
@@ -36,7 +39,7 @@ func get(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error
 	return resp.BulkString(val), nil
 }
 
-// parse set
+// set: sets the value of a key with optional expiration
 func set(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
 	if len(args) < 2 {
 		return nil, errors.New("ERR SET requires atleast two arguments")
