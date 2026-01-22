@@ -12,10 +12,21 @@ import (
 
 // ping: simple ping command
 func ping(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+	subCount := kv.GetSubscriptionCount(msgCh)
+	if subCount > 0 {
+		payload := ""
+		if len(args) > 0 {
+			payload = args[0]
+		}
+		return resp.Array{
+			resp.BulkString("pong"),
+			resp.BulkString(payload),
+		}, nil
+	}
+
 	if len(args) == 0 {
 		return resp.SimpleString("PONG"), nil
 	}
-	//in case of argument, return the first argument
 	return resp.BulkString(args[0]), nil
 }
 
