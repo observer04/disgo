@@ -135,13 +135,15 @@ func startReplicaClient(host string, port int, localPort int, kv *store.Kv, hand
 		cmd := strings.ToUpper(args[0])
 		cmdArgs := args[1:]
 
+		payload, err := replication.EncodeCommand(cmd, cmdArgs)
 		if cmd == "REPLCONF" && len(cmdArgs) >= 2 && strings.ToUpper(cmdArgs[0]) == "GETACK" {
 			offset := replState.Offset()
 			_ = sendCmd("REPLCONF", "ACK", strconv.FormatInt(offset, 10))
+			if err == nil {
+				replState.AdvanceOffset(int64(len(payload)))
+			}
 			continue
 		}
-
-		payload, err := replication.EncodeCommand(cmd, cmdArgs)
 		if err == nil {
 			replState.AdvanceOffset(int64(len(payload)))
 		}
