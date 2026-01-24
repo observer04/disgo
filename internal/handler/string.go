@@ -11,7 +11,7 @@ import (
 )
 
 // ping: simple ping command
-func ping(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func ping(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	subCount := kv.GetSubscriptionCount(msgCh)
 	if subCount > 0 {
 		payload := ""
@@ -31,7 +31,7 @@ func ping(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, erro
 }
 
 // echo: echo the given string
-func echo(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func echo(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) != 1 {
 		return nil, errors.New("ERR ECHO requires exactly one argument")
 	}
@@ -39,7 +39,7 @@ func echo(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, erro
 }
 
 // get: gets the value of a key
-func get(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func get(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) != 1 {
 		return nil, errors.New("ERR GET requires exactly one argument")
 	}
@@ -51,7 +51,7 @@ func get(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error
 }
 
 // set: sets the value of a key with optional expiration
-func set(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func set(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) < 2 {
 		return nil, errors.New("ERR SET requires atleast two arguments")
 	}

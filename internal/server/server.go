@@ -8,13 +8,14 @@ import (
 	"log"
 	"net"
 
+	"github.com/codecrafters-io/redis-starter-go/internal/acl"
 	"github.com/codecrafters-io/redis-starter-go/internal/handler"
 	"github.com/codecrafters-io/redis-starter-go/internal/rdb"
 	"github.com/codecrafters-io/redis-starter-go/internal/resp"
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
-func Start(dir, dbfilename string) {
+func Start(dir, dbfilename, requirePass string) {
 	fmt.Println("Logs from your program will appear here!")
 
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
@@ -36,8 +37,17 @@ func Start(dir, dbfilename string) {
 	// Start background expiration loop
 	go kvStore.RunExpirationLoop()
 
+	// Initialize ACL Engine
+	aclEngine := acl.NewEngine(requirePass)
+
 	// Get handlers
 	commandHandlers := handler.GetHandlers()
+
+	// Configuration
+	config := &handler.Config{
+		RequirePass: requirePass,
+		AclEngine:   aclEngine,
+	}
 
 	//Accept connections in a loop
 	for {
@@ -48,15 +58,28 @@ func Start(dir, dbfilename string) {
 		}
 
 		//Handle Client connections
-		go HandleClient(con, kvStore, commandHandlers)
+		go HandleClient(con, kvStore, commandHandlers, config)
 	}
 }
 
-func HandleClient(con net.Conn, kv *store.Kv, handlers map[string]handler.Handler) {
+func HandleClient(con net.Conn, kv *store.Kv, handlers map[string]handler.Handler, config *handler.Config) {
 	// We need to support concurrent reading (commands) and writing (pub/sub messages)
 	// Create a channel for messages destined for this client
 	msgCh := make(chan interface{}, 100) // buffer to avoid blocking
 	defer close(msgCh)
+	
+	defaultUser, _ := config.AclEngine.GetUser("default")
+	authenticated := false
+	if defaultUser.Password == "" {
+		authenticated = true
+	}
+
+	connState := &handler.ConnectionState{
+		Authenticated: authenticated,
+		User:          defaultUser,
+		Config:        config,
+	}
+
 	// We also need to clean up subscriptions on exit
 	// But `kv.Unsubscribe` requires the channel.
 	// The store doesn't support "UnsubscribeAll".
@@ -97,7 +120,7 @@ func HandleClient(con net.Conn, kv *store.Kv, handlers map[string]handler.Handle
 			continue
 		}
 
-		response, err := handler.Dispatch(args[0], args[1:], kv, msgCh, handlers)
+		response, err := handler.Dispatch(args[0], args[1:], kv, msgCh, handlers, connState)
 		if err != nil {
 			// In Dispatcher, we might return resp.Error as error or as value?
 			// The current signature is (resp.Value, error).

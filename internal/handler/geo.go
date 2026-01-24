@@ -10,7 +10,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
-func geoadd(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func geoadd(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) < 4 || (len(args)-1)%3 != 0 {
 		return nil, errors.New("ERR wrong number of arguments for 'geoadd' command")
 	}
@@ -50,7 +50,7 @@ func geoadd(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, er
 	return resp.Integer(int64(added)), nil
 }
 
-func geodist(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func geodist(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) < 3 {
 		return nil, errors.New("ERR wrong number of arguments for 'geodist' command")
 	}
@@ -92,7 +92,7 @@ func geodist(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, e
 	return resp.BulkString(strconv.FormatFloat(dist, 'f', 4, 64)), nil
 }
 
-func geopos(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func geopos(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) < 2 {
 		return nil, errors.New("ERR wrong number of arguments for 'geopos' command")
 	}
@@ -120,7 +120,7 @@ func geopos(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, er
 	return resp.Array(results), nil
 }
 
-func geohash(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func geohash(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) < 2 {
 		return nil, errors.New("ERR wrong number of arguments for 'geohash' command")
 	}

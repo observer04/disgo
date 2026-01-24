@@ -9,7 +9,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
-func zadd(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func zadd(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) < 3 || len(args)%2 == 0 { // key score member [score member]... -> odd number of args (key + pairs)
 		return nil, errors.New("ERR wrong number of arguments for 'zadd' command")
 	}
@@ -31,7 +31,7 @@ func zadd(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, erro
 	return resp.Integer(int64(added)), nil
 }
 
-func zrange(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func zrange(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) < 3 {
 		return nil, errors.New("ERR wrong number of arguments for 'zrange' command")
 	}
@@ -67,7 +67,7 @@ func zrange(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, er
 	return resp.Array(respItems), nil
 }
 
-func zcard(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func zcard(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) != 1 {
 		return nil, errors.New("ERR wrong number of arguments for 'zcard' command")
 	}
@@ -76,7 +76,7 @@ func zcard(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, err
 	return resp.Integer(int64(count)), nil
 }
 
-func zrem(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func zrem(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) < 2 {
 		return nil, errors.New("ERR wrong number of arguments for 'zrem' command")
 	}
@@ -86,7 +86,7 @@ func zrem(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, erro
 	return resp.Integer(int64(removed)), nil
 }
 
-func zrank(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func zrank(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) != 2 {
 		return nil, errors.New("ERR wrong number of arguments for 'zrank' command")
 	}
@@ -99,7 +99,7 @@ func zrank(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, err
 	return resp.Integer(int64(rank)), nil
 }
 
-func zscore(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func zscore(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) != 2 {
 		return nil, errors.New("ERR wrong number of arguments for 'zscore' command")
 	}

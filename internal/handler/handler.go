@@ -1,12 +1,25 @@
 package handler
 
 import (
+	"github.com/codecrafters-io/redis-starter-go/internal/acl"
 	"github.com/codecrafters-io/redis-starter-go/internal/resp"
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
+// ConnectionState holds the state of a client connection
+type ConnectionState struct {
+	Authenticated bool
+	User          *acl.User
+	Config        *Config
+}
+
+type Config struct {
+	RequirePass string
+	AclEngine   *acl.Engine
+}
+
 // Handler function type
-type Handler func(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error)
+type Handler func(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error)
 
 // GetHandlers returns the map of command handlers
 func GetHandlers() map[string]Handler {
@@ -41,5 +54,7 @@ func GetHandlers() map[string]Handler {
 		"GEOPOS":      geopos,
 		"GEOHASH":     geohash,
 		"GEOSEARCH":   geosearch,
+		"AUTH":        auth,
+		"ACL":         aclCmd,
 	}
 }

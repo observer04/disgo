@@ -11,7 +11,7 @@ import (
 )
 
 // xadd: adds an entry to a stream; returns the ID of the added entry; syntax: XADD key id field value [field value ...]
-func xadd(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func xadd(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) < 4 || (len(args)-2)%2 != 0 {
 		return nil, errors.New("ERR wrong number of arguments for 'xadd' command")
 	}
@@ -29,7 +29,7 @@ func xadd(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, erro
 }
 
 // xrange: gets a range of entries from a stream; syntax: XRANGE key start end; start and end are IDs
-func xrange(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func xrange(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) != 3 {
 		return nil, errors.New("ERR wrong number of arguments for 'xrange' command")
 	}
@@ -63,7 +63,7 @@ func xrange(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, er
 }
 
 // xread: reads entries from one or more streams; supports blocking; syntax: XREAD [BLOCK milliseconds] STREAMS key [key ...] id [id ...]
-func xread(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func xread(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	var blockTime int64 = -1 // -1 means no block
 	streamsArgIdx := -1      // index of "STREAMS" argument
 

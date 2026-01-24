@@ -19,7 +19,7 @@ type geoSearchResult struct {
 	long   float64
 }
 
-func geosearch(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func geosearch(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) < 4 {
 		return nil, errors.New("ERR wrong number of arguments for 'geosearch' command")
 	}

@@ -5,7 +5,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
-func subscribe(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func subscribe(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) == 0 {
 		return nil, nil // Or error?
 	}
@@ -26,7 +26,7 @@ func subscribe(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value,
 	return nil, nil // Already sent responses
 }
 
-func publish(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func publish(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	if len(args) != 2 {
 		return nil, nil // Error
 	}
@@ -44,7 +44,7 @@ func publish(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, e
 	return resp.Integer(count), nil
 }
 
-func unsubscribe(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+func unsubscribe(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
 	channels := args
 	if len(channels) == 0 {
 		// If no channels specified, unsubscribe from all (not supported by store efficiently yet, but let's assume empty means nothing or all?)
