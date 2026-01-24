@@ -30,5 +30,9 @@ func GetHandlers() map[string]Handler {
 		"SUBSCRIBE": subscribe,
 		"PUBLISH":   publish,
 		"UNSUBSCRIBE": unsubscribe,
+		"ZADD":        zadd,
+		"ZRANGE":      zrange,
+		"ZCARD":       zcard,
+		"ZREM":        zrem,
 	}
 }

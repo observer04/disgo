@@ -11,6 +11,7 @@ type Kv struct {
 	data    map[string]string
 	exp     map[string]time.Time
 	lists   map[string][]string
+	sortedSets map[string]*SortedSet
 	streams map[string]*Stream // key to Stream mapping
 	// waiters holds channels for clients blocked on BLPOP for a given key.
 	// When an element is pushed to a list with waiting clients, the server
@@ -34,6 +35,7 @@ func NewKv(dir, dbfilename string) *Kv {
 		data:          make(map[string]string),
 		exp:           make(map[string]time.Time),
 		lists:         make(map[string][]string),
+		sortedSets:    make(map[string]*SortedSet),
 		streams:       make(map[string]*Stream),
 		waiters:       make(map[string][]chan string),
 		streamWaiters: make(map[string][]chan string),
@@ -84,6 +86,7 @@ func (k *Kv) Type(key string) string {
 		if time.Now().After(expTime) { // key has expired
 			delete(k.data, key)
 			delete(k.lists, key)
+			delete(k.sortedSets, key)
 			delete(k.exp, key)
 			return "none"
 		}
@@ -94,6 +97,9 @@ func (k *Kv) Type(key string) string {
 	}
 	if _, ok := k.lists[key]; ok {
 		return "list"
+	}
+	if _, ok := k.sortedSets[key]; ok {
+		return "zset"
 	}
 	if _, ok := k.streams[key]; ok {
 		return "stream"
@@ -112,6 +118,7 @@ func (k *Kv) RunExpirationLoop() {
 			if now.After(exp) { // key has expired
 				delete(k.data, key)
 				delete(k.lists, key)
+				delete(k.sortedSets, key)
 				delete(k.exp, key)
 			}
 		}

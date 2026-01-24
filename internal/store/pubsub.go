@@ -30,7 +30,7 @@ func (k *Kv) Publish(channel string, message interface{}) int {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
-	subs, ok := k.subs[channel]
+	subs, ok := k.subs[channel] // get subscribers for channel
 	if !ok {
 		return 0
 	}
@@ -52,7 +52,7 @@ func (k *Kv) UnsubscribeAll(ch chan interface{}) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
-	for _, subs := range k.subs {
+	for _, subs := range k.subs { // iterate all channels
 		delete(subs, ch)
 	}
 }
