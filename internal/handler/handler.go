@@ -40,5 +40,6 @@ func GetHandlers() map[string]Handler {
 		"GEODIST":     geodist,
 		"GEOPOS":      geopos,
 		"GEOHASH":     geohash,
+		"GEOSEARCH":   geosearch,
 	}
 }

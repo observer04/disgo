@@ -7,6 +7,7 @@ import (
 // Constants for WGS84 Earth radius
 const EarthRadiusMeters = 6372797.560856
 
+// Mercator projection limits;
 const (
 	MercatorMax = 20037726.37
 	MercatorMin = -20037726.37
@@ -14,7 +15,7 @@ const (
 
 // Limits from Redis implementation
 var (
-	LatRange = [2]float64{-85.05112878, 85.05112878}
+	LatRange  = [2]float64{-85.05112878, 85.05112878}
 	LongRange = [2]float64{-180, 180}
 )
 
@@ -60,36 +61,25 @@ func Decode(hash uint64) (float64, float64) {
 	latMin, latMax := LatRange[0], LatRange[1]
 	longMin, longMax := LongRange[0], LongRange[1]
 
-	// 52 bits.
-	// The loop goes from MSB to LSB?
-	// The encoding pushes bits at LSB.
-	// So to decode we need to process bits from MSB (bit 51) down to 0?
-	// Actually, let's reverse the encoding logic.
-	
-	// My Encode loop:
-	// i=0 (MSB): writes long bit, then lat bit.
-	// ...
-	// So bit 51 is long, bit 50 is lat.
-	
 	for i := 0; i < 26; i++ {
 		// Bit index for long: 51 - 2*i
 		// Bit index for lat:  50 - 2*i
-		
+
 		// Longitude bit
-		if (hash >> (51 - 2*i)) & 1 == 1 {
+		if (hash>>(51-2*i))&1 == 1 {
 			longMin = (longMin + longMax) / 2
 		} else {
 			longMax = (longMin + longMax) / 2
 		}
-		
+
 		// Latitude bit
-		if (hash >> (50 - 2*i)) & 1 == 1 {
+		if (hash>>(50-2*i))&1 == 1 {
 			latMin = (latMin + latMax) / 2
 		} else {
 			latMax = (latMin + latMax) / 2
 		}
 	}
-	
+
 	return (latMin + latMax) / 2, (longMin + longMax) / 2
 }
 
@@ -121,23 +111,23 @@ func ToGeohashString(hash uint64) string {
 	// We have 52 bits.
 	// Redis implementation details might differ slightly but let's try standard approach.
 	// Actually Redis uses 52 bits which maps to about 10-11 chars.
-	
+
 	// Let's implement the standard string construction.
 	// We need to re-encode using 5-bit precision.
 	// Or we can assume 'hash' is already the interleaved bits.
-	
+
 	// Wait, the standard textual geohash doesn't map 1:1 to the 52-bit integer perfectly aligned?
 	// The 52-bit integer is used for ZSET scoring (sorting).
 	// The string representation is just another encoding of the lat/long.
 	// So better to re-encode from lat/long OR unpack the hash.
-	
+
 	// Unpacking hash is effectively:
 	// Take 5 bits at a time from the interleaved stream?
 	// But our hash was built 2-bits at a time (interleaved).
-	
+
 	// Let's decode to lat/long first, then encode to string?
 	// That's safer.
-	
+
 	lat, long := Decode(hash)
 	return EncodeToString(lat, long)
 }
@@ -146,13 +136,13 @@ func EncodeToString(lat, long float64) string {
 	chars := make([]byte, 11)
 	latMin, latMax := LatRange[0], LatRange[1]
 	longMin, longMax := LongRange[0], LongRange[1]
-	
+
 	bit := 0
 	ch := 0
 	idx := 0
-	
-	even := true 
-	
+
+	even := true
+	// even bit: longitude, odd bit: latitude
 	for idx < 11 {
 		ch <<= 1
 		if even {
@@ -174,12 +164,12 @@ func EncodeToString(lat, long float64) string {
 				latMax = mid
 			}
 		}
-		
+
 		even = !even
 		bit++
-		
+		// Every 5 bits, we have a character
 		if bit == 5 {
-			chars[idx] = base32Alphabet[ch]
+			chars[idx] = base32Alphabet[ch] // Map 0-31 to char
 			idx++
 			bit = 0
 			ch = 0
