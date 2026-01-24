@@ -135,3 +135,16 @@ func Write(w *bufio.Writer, val Value) error {
 		return errors.New("unsupported RESP type")
 	}
 }
+
+// Encode serializes a RESP value into bytes.
+func Encode(val Value) ([]byte, error) {
+	var buf bytes.Buffer
+	w := bufio.NewWriter(&buf)
+	if err := Write(w, val); err != nil {
+		return nil, err
+	}
+	if err := w.Flush(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/codecrafters-io/redis-starter-go/internal/replication"
 	"github.com/codecrafters-io/redis-starter-go/internal/resp"
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
@@ -119,5 +120,24 @@ func Dispatch(cmd string, args []string, kv *store.Kv, msgCh chan interface{}, h
 	if err != nil {
 		return resp.Error(err.Error()), nil
 	}
+
+	if state.Config != nil && state.Config.Replication != nil {
+		repl := state.Config.Replication
+		if repl.Role() == replication.RoleMaster && !repl.IsReplicaChannel(msgCh) && isWriteCommand(cmd) {
+			_, repErr := repl.PropagateCommand(cmd, args)
+			if repErr != nil {
+				return nil, repErr
+			}
+		}
+	}
 	return val, nil
+}
+
+func isWriteCommand(cmd string) bool {
+	switch cmd {
+	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "ZADD", "ZREM", "XADD", "GEOADD":
+		return true
+	default:
+		return false
+	}
 }

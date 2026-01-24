@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/codecrafters-io/redis-starter-go/internal/acl"
+	"github.com/codecrafters-io/redis-starter-go/internal/replication"
 	"github.com/codecrafters-io/redis-starter-go/internal/resp"
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
@@ -12,6 +13,7 @@ type ConnectionState struct {
 	User          *acl.User
 	Config        *Config
 	Tx            *TxState
+	ReplicaPort   int
 }
 
 // TxState holds the transaction state for a connection.
@@ -30,6 +32,7 @@ type QueuedCommand struct {
 type Config struct {
 	RequirePass string
 	AclEngine   *acl.Engine
+	Replication *replication.State
 }
 
 // Handler function type
@@ -38,25 +41,25 @@ type Handler func(args []string, kv *store.Kv, msgCh chan interface{}, state *Co
 // GetHandlers returns the map of command handlers
 func GetHandlers() map[string]Handler {
 	return map[string]Handler{
-		"PING":      ping,
-		"ECHO":      echo,
-		"SET":       set,
-		"GET":       get,
-		"INCR":      incr,
-		"RPUSH":     rpush,
-		"LRANGE":    lrange,
-		"LPUSH":     lpush,
-		"BLPOP":     blpop,
-		"LLEN":      llen,
-		"LPOP":      lpop,
-		"TYPE":      typeCmd,
-		"XADD":      xadd,
-		"XRANGE":    xrange,
-		"XREAD":     xread,
-		"CONFIG":    config,
-		"KEYS":      keys,
-		"SUBSCRIBE": subscribe,
-		"PUBLISH":   publish,
+		"PING":        ping,
+		"ECHO":        echo,
+		"SET":         set,
+		"GET":         get,
+		"INCR":        incr,
+		"RPUSH":       rpush,
+		"LRANGE":      lrange,
+		"LPUSH":       lpush,
+		"BLPOP":       blpop,
+		"LLEN":        llen,
+		"LPOP":        lpop,
+		"TYPE":        typeCmd,
+		"XADD":        xadd,
+		"XRANGE":      xrange,
+		"XREAD":       xread,
+		"CONFIG":      config,
+		"KEYS":        keys,
+		"SUBSCRIBE":   subscribe,
+		"PUBLISH":     publish,
 		"UNSUBSCRIBE": unsubscribe,
 		"ZADD":        zadd,
 		"ZRANGE":      zrange,
@@ -71,5 +74,9 @@ func GetHandlers() map[string]Handler {
 		"GEOSEARCH":   geosearch,
 		"AUTH":        auth,
 		"ACL":         aclCmd,
+		"INFO":        info,
+		"REPLCONF":    replconf,
+		"PSYNC":       psync,
+		"WAIT":        waitCmd,
 	}
 }

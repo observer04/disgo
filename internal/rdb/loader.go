@@ -38,9 +38,16 @@ func Load(dir, dbfilename string, kv *store.Kv) error {
 	}
 	defer f.Close()
 
-	r := bufio.NewReader(f)
-
 	// Load RDB contents
+	return loadFromReader(bufio.NewReader(f), kv)
+}
+
+// LoadFromReader loads an RDB payload from a reader (used for replication).
+func LoadFromReader(r io.Reader, kv *store.Kv) error {
+	return loadFromReader(bufio.NewReader(r), kv)
+}
+
+func loadFromReader(r *bufio.Reader, kv *store.Kv) error {
 	// 1. Header: "REDIS"
 	header := make([]byte, 5)
 	if _, err := io.ReadFull(r, header); err != nil {
@@ -57,7 +64,7 @@ func Load(dir, dbfilename string, kv *store.Kv) error {
 
 	var expiry *time.Time
 
-	for { // Read opcodes until EOF; for simplicity, we assume a flat structure with only string keys
+	for {
 		b, err := r.ReadByte()
 		if err != nil {
 			return err
@@ -123,7 +130,7 @@ func Load(dir, dbfilename string, kv *store.Kv) error {
 					return err
 				}
 				if expiry != nil {
-					kv.SetWithDeadline(key, val, *expiry)
+					kv.SetWithTTL(key, val, time.Until(*expiry))
 				} else {
 					kv.Set(key, val)
 				}

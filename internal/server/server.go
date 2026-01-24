@@ -11,20 +11,25 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/internal/acl"
 	"github.com/codecrafters-io/redis-starter-go/internal/handler"
 	"github.com/codecrafters-io/redis-starter-go/internal/rdb"
+	"github.com/codecrafters-io/redis-starter-go/internal/replication"
 	"github.com/codecrafters-io/redis-starter-go/internal/resp"
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
-func Start(dir, dbfilename, requirePass string) {
+func Start(dir, dbfilename, requirePass, replicaHost string, replicaPort int, listenPort int) {
 	fmt.Println("Logs from your program will appear here!")
 
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
+	if listenPort == 0 {
+		listenPort = 6379
+	}
+	addr := fmt.Sprintf("0.0.0.0:%d", listenPort)
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatal("Failed to bind to port 6379", err)
+		log.Fatal("Failed to bind to port", listenPort, err)
 	}
 
 	defer l.Close()
-	fmt.Println("Server listening on 6379")
+	fmt.Println("Server listening on", listenPort)
 
 	// Initialize key-value store
 	kvStore := store.NewKv(dir, dbfilename)
@@ -43,10 +48,22 @@ func Start(dir, dbfilename, requirePass string) {
 	// Get handlers
 	commandHandlers := handler.GetHandlers()
 
+	var replState *replication.State
+	if replicaHost != "" {
+		if replicaPort == 0 {
+			replicaPort = 6379
+		}
+		replState = replication.NewReplica(replicaHost, replicaPort)
+		go startReplicaClient(replicaHost, replicaPort, listenPort, kvStore, commandHandlers, aclEngine, replState)
+	} else {
+		replState = replication.NewMaster()
+	}
+
 	// Configuration
 	config := &handler.Config{
 		RequirePass: requirePass,
 		AclEngine:   aclEngine,
+		Replication: replState,
 	}
 
 	//Accept connections in a loop
@@ -67,7 +84,7 @@ func HandleClient(con net.Conn, kv *store.Kv, handlers map[string]handler.Handle
 	// Create a channel for messages destined for this client
 	msgCh := make(chan interface{}, 100) // buffer to avoid blocking
 	defer close(msgCh)
-	
+
 	defaultUser, _ := config.AclEngine.GetUser("default")
 	authenticated := false
 	if defaultUser.Password == "" {
@@ -115,6 +132,9 @@ func HandleClient(con net.Conn, kv *store.Kv, handlers map[string]handler.Handle
 			}
 			// Unsubscribe from all (Todo: implement efficiently)
 			kv.UnsubscribeAll(msgCh)
+			if config.Replication != nil {
+				config.Replication.UnregisterReplica(msgCh)
+			}
 			return
 		}
 		if len(args) == 0 {
@@ -147,12 +167,12 @@ func HandleClient(con net.Conn, kv *store.Kv, handlers map[string]handler.Handle
 		}
 		// Assuming Dispatcher returns `(resp.Value, error)` where error is real go error.
 		// If command failed with Redis error, it should be in `resp.Value`.
-		
+
 		// Let's fix Dispatcher logic in next step.
 		// For now, let's write the `HandleClient` assuming Dispatcher works as:
 		// Returns (response, nil) for success (including Redis errors).
 		// Returns (nil, err) for system errors.
-		
+
 		if err != nil {
 			log.Printf("Dispatch error: %v", err)
 			continue
