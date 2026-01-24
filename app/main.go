@@ -19,17 +19,22 @@ func main() {
 	port := flag.Int("port", 6379, "The port to listen on")
 	flag.Parse()
 
-	replHost := *replicaof
+	replHost := ""
 	replPort := 0
-	if replHost != "" {
-		if strings.Contains(replHost, ":") {
-			parts := strings.SplitN(replHost, ":", 2)
+	if *replicaof != "" {
+		parts := strings.Fields(*replicaof)
+		if len(parts) > 0 {
 			replHost = parts[0]
+		}
+		if len(parts) > 1 {
 			if p, err := strconv.Atoi(parts[1]); err == nil {
 				replPort = p
 			}
-		} else if len(flag.Args()) > 0 {
-			if p, err := strconv.Atoi(flag.Args()[0]); err == nil {
+		}
+		if replPort == 0 && strings.Contains(replHost, ":") {
+			hostParts := strings.SplitN(replHost, ":", 2)
+			replHost = hostParts[0]
+			if p, err := strconv.Atoi(hostParts[1]); err == nil {
 				replPort = p
 			}
 		}
