@@ -98,3 +98,19 @@ func zrank(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, err
 	}
 	return resp.Integer(int64(rank)), nil
 }
+
+func zscore(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+	if len(args) != 2 {
+		return nil, errors.New("ERR wrong number of arguments for 'zscore' command")
+	}
+	key := args[0]
+	member := args[1]
+	score, ok := kv.ZScore(key, member)
+	if !ok {
+		return resp.NullBulkString{}, nil
+	}
+	// Format score as string. Redis uses string representation for scores.
+	// Use 'g' format to remove trailing zeros if integral, but generally consistent with ZRANGE WITHSCORES
+	scoreStr := strconv.FormatFloat(score, 'g', -1, 64)
+	return resp.BulkString(scoreStr), nil
+}

@@ -201,6 +201,18 @@ func (k *Kv) ZRank(key string, member string) (int, bool) {
 	return ss.Rank(member)
 }
 
+// ZScore returns the score of member in the sorted set stored at key
+func (k *Kv) ZScore(key string, member string) (float64, bool) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	ss, ok := k.sortedSets[key]
+	if !ok {
+		return 0, false
+	}
+	return ss.ZScore(member)
+}
+
 // ZRem removes members from the sorted set stored at key
 func (k *Kv) ZRem(key string, members ...string) int {
 	k.mu.Lock()
