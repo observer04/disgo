@@ -34,5 +34,6 @@ func GetHandlers() map[string]Handler {
 		"ZRANGE":      zrange,
 		"ZCARD":       zcard,
 		"ZREM":        zrem,
+		"ZRANK":       zrank,
 	}
 }

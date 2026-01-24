@@ -85,3 +85,16 @@ func zrem(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, erro
 	removed := kv.ZRem(key, members...)
 	return resp.Integer(int64(removed)), nil
 }
+
+func zrank(args []string, kv *store.Kv, msgCh chan interface{}) (resp.Value, error) {
+	if len(args) != 2 {
+		return nil, errors.New("ERR wrong number of arguments for 'zrank' command")
+	}
+	key := args[0]
+	member := args[1]
+	rank, ok := kv.ZRank(key, member)
+	if !ok {
+		return resp.NullBulkString{}, nil
+	}
+	return resp.Integer(int64(rank)), nil
+}

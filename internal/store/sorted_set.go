@@ -166,6 +166,41 @@ func (k *Kv) ZCard(key string) int {
 	return ss.Len()
 }
 
+// Rank returns the rank of the member (0-based, lowest score first).
+// Returns the rank and true if found, 0 and false otherwise.
+func (ss *SortedSet) Rank(member string) (int, bool) {
+	score, ok := ss.dict[member]
+	if !ok {
+		return 0, false
+	}
+
+	// Find the first index with this score
+	idx := sort.Search(len(ss.list), func(i int) bool {
+		n := ss.list[i]
+		if n.Score == score {
+			return n.Member >= member
+		}
+		return n.Score > score
+	})
+
+	if idx < len(ss.list) && ss.list[idx].Member == member {
+		return idx, true
+	}
+	return 0, false
+}
+
+// ZRank returns the rank of member in the sorted set stored at key
+func (k *Kv) ZRank(key string, member string) (int, bool) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	ss, ok := k.sortedSets[key]
+	if !ok {
+		return 0, false
+	}
+	return ss.Rank(member)
+}
+
 // ZRem removes members from the sorted set stored at key
 func (k *Kv) ZRem(key string, members ...string) int {
 	k.mu.Lock()
