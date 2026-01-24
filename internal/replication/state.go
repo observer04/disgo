@@ -183,18 +183,19 @@ func (s *State) RequestAck() (int64, error) {
 		s.mu.Unlock()
 		return s.offset, nil
 	}
-	s.offset += int64(len(payload))
 	replicas := make([]*Replica, 0, len(s.replicas))
 	for _, rep := range s.replicas {
 		replicas = append(replicas, rep)
 	}
+	currentOffset := s.offset
 	s.mu.Unlock()
 
 	val := resp.Array{resp.BulkString(cmd), resp.BulkString("GETACK"), resp.BulkString("*")}
 	for _, rep := range replicas {
 		rep.ch <- val
 	}
-	return s.Offset(), nil
+	_ = payload
+	return currentOffset, nil
 }
 
 func (s *State) WaitForAcks(targetCount int, targetOffset int64, timeout time.Duration) int {
