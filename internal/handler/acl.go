@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"strings"
 
+	"github.com/codecrafters-io/redis-starter-go/internal/acl"
 	"github.com/codecrafters-io/redis-starter-go/internal/resp"
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
@@ -20,6 +23,8 @@ func aclCmd(args []string, kv *store.Kv, msgCh chan interface{}, state *Connecti
 		return aclWhoami(args[1:], state)
 	case "GETUSER":
 		return aclGetUser(args[1:], state)
+	case "SETUSER":
+		return aclSetUser(args[1:], state)
 	case "LIST", "USERS":
 		// Optional: List users
 		return aclList(state)
@@ -48,12 +53,9 @@ func aclGetUser(args []string, state *ConnectionState) (resp.Value, error) {
 	
 	user, ok := state.Config.AclEngine.GetUser(username)
 	if !ok {
-		return resp.NullBulkString{}, nil // Redis returns nil if user doesn't exist? Or empty array?
-		// "If the user does not exist, (nil) is returned."
+		return resp.NullBulkString{}, nil
 	}
 
-	// Returns array of properties
-	// flags, passwords, commands, keys, channels, selectors...
 	res := resp.Array{}
 
 	res = append(res, resp.BulkString("flags"))
@@ -66,29 +68,60 @@ func aclGetUser(args []string, state *ConnectionState) (resp.Value, error) {
 	if user.Password == "" {
 		flags = append(flags, resp.BulkString("nopass"))
 	}
-	// Simplified flags
 	res = append(res, flags)
 
 	res = append(res, resp.BulkString("passwords"))
 	passwords := resp.Array{}
 	if user.Password != "" {
-		// Do not return actual password usually?
-		// ACL GETUSER returns hashes.
-		// Since we store plain text (for this exercise), we might return "+<password>"?
-		// Redis: "passwords" -> list of password hashes.
-		// If we store plaintext, let's just return "+<plaintext>" to mimic representation.
-		passwords = append(passwords, resp.BulkString("+"+user.Password))
+		hash := sha256.Sum256([]byte(user.Password))
+		hashStr := hex.EncodeToString(hash[:])
+		passwords = append(passwords, resp.BulkString(hashStr))
 	}
 	res = append(res, passwords)
 
 	res = append(res, resp.BulkString("commands"))
-	res = append(res, resp.BulkString("+@all")) // Placeholder
+	res = append(res, resp.BulkString("+@all")) 
 
 	res = append(res, resp.BulkString("keys"))
-	res = append(res, resp.Array{resp.BulkString("~*")}) // Placeholder (all keys)
+	res = append(res, resp.Array{resp.BulkString("~*")}) 
 
-	// Minimal implementation for now
 	return res, nil
+}
+
+func aclSetUser(args []string, state *ConnectionState) (resp.Value, error) {
+	if len(args) < 1 {
+		return nil, errors.New("ERR wrong number of arguments for 'acl|setuser' command")
+	}
+	username := args[0]
+	rules := args[1:]
+
+	var err error
+	state.Config.AclEngine.SetUser(username, func(u *acl.User) {
+		for _, rule := range rules {
+			ruleLower := strings.ToLower(rule)
+			if ruleLower == "on" {
+				u.Enabled = true
+			} else if ruleLower == "off" {
+				u.Enabled = false
+			} else if ruleLower == "nopass" {
+				u.Password = ""
+			} else if strings.HasPrefix(rule, ">") {
+				u.Password = rule[1:]
+			} else if ruleLower == "+@all" {
+				// We don't implement full permission logic yet, but we accept the rule
+			} else if strings.HasPrefix(ruleLower, "~") {
+				// Key pattern, ignore for now
+			} else {
+				// Unknown rule, but we'll ignore for this simplified version
+			}
+		}
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.SimpleString("OK"), nil
 }
 
 func aclList(state *ConnectionState) (resp.Value, error) {

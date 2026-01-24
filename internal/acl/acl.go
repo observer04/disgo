@@ -78,3 +78,18 @@ func (e *Engine) ListUsers() []string {
 	}
 	return names
 }
+
+func (e *Engine) SetUser(name string, updateFn func(*User)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	u, ok := e.users[name]
+	if !ok {
+		u = &User{
+			Name:    name,
+			Enabled: false, // default to off
+		}
+		e.users[name] = u
+	}
+	updateFn(u)
+}
