@@ -15,7 +15,7 @@ func Dispatch(cmd string, args []string, kv *store.Kv, msgCh chan interface{}, h
 	cmd = strings.ToUpper(cmd)
 
 	// Auth check
-	if state.Config != nil && state.Config.RequirePass != "" && !state.Authenticated && cmd != "AUTH" && cmd != "QUIT" {
+	if !state.Authenticated && cmd != "AUTH" && cmd != "QUIT" {
 		return resp.Error("NOAUTH Authentication required."), nil
 	}
 
