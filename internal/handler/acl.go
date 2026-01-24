@@ -63,6 +63,9 @@ func aclGetUser(args []string, state *ConnectionState) (resp.Value, error) {
 	} else {
 		flags = append(flags, resp.BulkString("off"))
 	}
+	if user.Password == "" {
+		flags = append(flags, resp.BulkString("nopass"))
+	}
 	// Simplified flags
 	res = append(res, flags)
 
@@ -75,8 +78,6 @@ func aclGetUser(args []string, state *ConnectionState) (resp.Value, error) {
 		// Redis: "passwords" -> list of password hashes.
 		// If we store plaintext, let's just return "+<plaintext>" to mimic representation.
 		passwords = append(passwords, resp.BulkString("+"+user.Password))
-	} else {
-		passwords = append(passwords, resp.BulkString("nopass"))
 	}
 	res = append(res, passwords)
 
