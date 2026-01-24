@@ -9,7 +9,7 @@ import (
 // SetWithTTL stores the key-value pair in the Kv store with an optional TTL
 func (k *Kv) SetWithTTL(key, value string, ttl time.Duration) {
 	var deadline time.Time
-	if ttl > 0 {
+	if ttl != 0 {
 		deadline = time.Now().Add(ttl)
 	}
 	k.SetWithDeadline(key, value, deadline)
