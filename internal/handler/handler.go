@@ -36,5 +36,9 @@ func GetHandlers() map[string]Handler {
 		"ZREM":        zrem,
 		"ZRANK":       zrank,
 		"ZSCORE":      zscore,
+		"GEOADD":      geoadd,
+		"GEODIST":     geodist,
+		"GEOPOS":      geopos,
+		"GEOHASH":     geohash,
 	}
 }
