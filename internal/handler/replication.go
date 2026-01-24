@@ -120,6 +120,9 @@ func waitCmd(args []string, kv *store.Kv, msgCh chan interface{}, state *Connect
 
 	currentOffset := repl.Offset()
 	acked := repl.AckedCount(currentOffset)
+	if currentOffset == 0 {
+		return resp.Integer(int64(acked)), nil
+	}
 	if acked >= numReplicas || timeoutMs == 0 {
 		return resp.Integer(int64(acked)), nil
 	}
