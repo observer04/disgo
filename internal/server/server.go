@@ -78,6 +78,7 @@ func HandleClient(con net.Conn, kv *store.Kv, handlers map[string]handler.Handle
 		Authenticated: authenticated,
 		User:          defaultUser,
 		Config:        config,
+		Tx:            &handler.TxState{},
 	}
 
 	// We also need to clean up subscriptions on exit

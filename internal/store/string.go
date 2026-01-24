@@ -1,6 +1,8 @@
 package store
 
 import (
+	"errors"
+	"strconv"
 	"time"
 )
 
@@ -55,4 +57,42 @@ func (k *Kv) Get(key string) (string, bool) {
 	}
 	val, ok := k.data[key]
 	return val, ok
+}
+
+// Incr increments the integer value of a key and returns the new value.
+func (k *Kv) Incr(key string) (int64, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	// Check for expiration
+	if expTime, ok := k.exp[key]; ok {
+		if time.Now().After(expTime) {
+			delete(k.data, key)
+			delete(k.exp, key)
+		}
+	}
+
+	if _, ok := k.lists[key]; ok {
+		return 0, errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+	if _, ok := k.sortedSets[key]; ok {
+		return 0, errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+	if _, ok := k.streams[key]; ok {
+		return 0, errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+
+	current, ok := k.data[key]
+	var n int64
+	if ok {
+		parsed, err := strconv.ParseInt(current, 10, 64)
+		if err != nil {
+			return 0, errors.New("ERR value is not an integer or out of range")
+		}
+		n = parsed
+	}
+
+	n++
+	k.data[key] = strconv.FormatInt(n, 10)
+	return n, nil
 }

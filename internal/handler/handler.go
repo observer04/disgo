@@ -11,6 +11,20 @@ type ConnectionState struct {
 	Authenticated bool
 	User          *acl.User
 	Config        *Config
+	Tx            *TxState
+}
+
+// TxState holds the transaction state for a connection.
+type TxState struct {
+	Active bool
+	Dirty  bool
+	Queue  []QueuedCommand
+}
+
+// QueuedCommand is a command stored during MULTI.
+type QueuedCommand struct {
+	Cmd  string
+	Args []string
 }
 
 type Config struct {
@@ -28,6 +42,7 @@ func GetHandlers() map[string]Handler {
 		"ECHO":      echo,
 		"SET":       set,
 		"GET":       get,
+		"INCR":      incr,
 		"RPUSH":     rpush,
 		"LRANGE":    lrange,
 		"LPUSH":     lpush,

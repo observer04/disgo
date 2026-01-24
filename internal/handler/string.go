@@ -90,3 +90,16 @@ func set(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionS
 	kv.SetWithTTL(key, value, ttl)
 	return resp.SimpleString("OK"), nil
 }
+
+// incr: increment the integer value of a key
+func incr(args []string, kv *store.Kv, msgCh chan interface{}, state *ConnectionState) (resp.Value, error) {
+	if len(args) != 1 {
+		return nil, errors.New("ERR INCR requires exactly one argument")
+	}
+
+	val, err := kv.Incr(args[0])
+	if err != nil {
+		return nil, err
+	}
+	return resp.Integer(val), nil
+}
