@@ -19,6 +19,7 @@ type Integer int64
 type Array []Value
 type NullArray struct{}
 type NullBulkString struct{}
+type RawBulk []byte
 
 // validate and read a line ending with CRLF
 func readLineCRLF(r *bufio.Reader) (string, error) {
@@ -113,6 +114,14 @@ func Write(w *bufio.Writer, val Value) error {
 	case BulkString:
 
 		if _, err := w.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v)); err != nil { //eg: $3\r\nfoo\r\n
+			return err
+		}
+		return nil
+	case RawBulk:
+		if _, err := w.WriteString(fmt.Sprintf("$%d\r\n", len(v))); err != nil {
+			return err
+		}
+		if _, err := w.Write(v); err != nil {
 			return err
 		}
 		return nil

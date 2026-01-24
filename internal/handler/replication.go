@@ -94,7 +94,7 @@ func psync(args []string, kv *store.Kv, msgCh chan interface{}, state *Connectio
 	msgCh <- resp.SimpleString(fullResync)
 
 	emptyRDB := []byte("REDIS0009\xFF")
-	msgCh <- resp.BulkString(string(emptyRDB))
+	msgCh <- resp.RawBulk(emptyRDB)
 	return nil, nil
 }
 

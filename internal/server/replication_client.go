@@ -176,12 +176,9 @@ func readBulkBytes(r *bufio.Reader) ([]byte, error) {
 	if length < 0 {
 		return nil, nil
 	}
-	buf := make([]byte, length+2)
+	buf := make([]byte, length)
 	if _, err := io.ReadFull(r, buf); err != nil {
 		return nil, err
 	}
-	if !bytes.HasSuffix(buf, []byte("\r\n")) {
-		return nil, errors.New("bulk string does not end with CRLF")
-	}
-	return buf[:length], nil
+	return buf, nil
 }
